@@ -1,0 +1,17 @@
+# TkTreeCtrl from the tcltk-depot (Tcl Community Association) fork —
+# a real Tcl 9 port (Tcl_Size throughout, dual 8/9 TEA). The C side
+# locates its script part via tcl_findLibrary, so the pkgindex sets
+# ::treectrl_library to the image dir before loading. On Windows the
+# widget calls uxtheme directly — hence the extra link library.
+version 2.5.2
+source git https://github.com/tcltk-depot/tktreectrl
+requires tk
+init Treectrl
+libs win64 {-luxtheme}
+vfs {library/*.tcl}
+pkgindex {
+    package ifneeded treectrl 2.5.2 [list ::apply {{dir} {
+	set ::treectrl_library $dir
+	load {} Treectrl
+    }} $dir]
+}

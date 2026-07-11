@@ -1,0 +1,45 @@
+/*
+ * appinit for a whalebuild kit (unix). Generated: the driver fills
+ * @EXTERNS@ and @REGISTRATIONS@ from the recipe list.
+ *
+ * Statically linked extensions are only announced here (interp = NULL);
+ * the actual init runs on `load {} <Prefix>` from the image's pkgIndex.
+ * The attached zip image mounts at //zipfs:/app (core behavior).
+ */
+
+#include "tcl.h"
+
+@EXTERNS@
+
+static int
+Whale_AppInit(
+    Tcl_Interp *interp)
+{
+    if (Tcl_Init(interp) == TCL_ERROR) {
+	return TCL_ERROR;
+    }
+
+@REGISTRATIONS@
+
+    /*
+     * lib/<pkg>/pkgIndex.tcl in the image are two levels below the
+     * auto_path entry //zipfs:/app, so add lib/ explicitly. Makes
+     * `package require` work with no main.tcl (interpreter mode).
+     */
+    Tcl_EvalEx(interp,
+	    "if {[file isdirectory //zipfs:/app/lib]} {"
+	    " lappend auto_path //zipfs:/app/lib }",
+	    -1, TCL_EVAL_GLOBAL);
+
+    return TCL_OK;
+}
+
+int
+main(
+    int argc,
+    char *argv[])
+{
+    TclZipfs_AppHook(&argc, &argv);
+    Tcl_Main(argc, argv, Whale_AppInit);
+    return 0;
+}

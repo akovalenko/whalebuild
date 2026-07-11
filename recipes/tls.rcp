@@ -1,0 +1,20 @@
+# TclTLS 2.0.1 (core.tcl-lang.org). The tls C code is static; OpenSSL is
+# linked DYNAMICALLY from the system on purpose: libssl.so.3 ABI is
+# stable and admins apply security updates without rebuilding the whale.
+# Linux-only for now: Windows has no system OpenSSL (options: ship the
+# two DLLs next to the exe / SChannel via TWAPI / static).
+# `make` breaks in the doc generator (dtplite wants tcllib) — build the
+# binaries target only. tls.tcl must ship next to the static pkgindex.
+version 2.0.1
+source tarball https://core.tcl-lang.org/tcltls/tarball/tls-2.0.1/tcltls.tar.gz
+platforms {linux}
+maketarget binaries
+libs linux {-lssl -lcrypto}
+vfs {library/tls.tcl}
+pkgindex {
+    package ifneeded tls 2.0.1 [list ::apply {{dir} {
+	load {} Tls
+	source -encoding utf-8 [file join $dir tls.tcl]
+    }} $dir]
+}
+init Tls

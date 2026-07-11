@@ -1,0 +1,430 @@
+#!/bin/sh
+# Restart with tclsh. \
+exec tclsh "$0" "$@"
+
+# whalebuild -- build a "whale": a single-file Tcl/Tk 9 executable with a
+# statically linked set of extensions and a zipfs image attached.
+#
+# The driver holds the mechanics (fetch, configure, make, appinit
+# generation, link, image); per-extension knowledge lives in
+# recipes/*.rcp. See README.md and NOTES.md.
+
+package require Tcl 8.6-
+
+set Root [file dirname [file dirname [file normalize [info script]]]]
+
+# ---------------------------------------------------------------- util --
+
+proc msg {s} {puts stderr "whalebuild: $s"; flush stderr}
+proc die {s} {puts stderr "whalebuild: error: $s"; exit 1}
+
+proc Run {log args} {
+    # Run a command with output captured to $log; show the tail on failure.
+    file mkdir [file dirname $log]
+    if {[catch {exec {*}$args >& $log} err]} {
+	catch {
+	    set f [open $log]
+	    set lines [split [string trimright [read $f] \n] \n]
+	    close $f
+	    puts stderr [join [lrange $lines end-24 end] \n]
+	}
+	die "command failed: [lindex $args 0] (log: $log)"
+    }
+}
+
+proc RunIn {dir log args} {
+    set here [pwd]
+    cd $dir
+    try { Run $log {*}$args } finally { cd $here }
+}
+
+proc Glob1 {args} {
+    # First match of a glob, or empty.
+    lindex [lsort [glob -nocomplain {*}$args]] 0
+}
+
+proc ConfigVar {file var} {
+    set f [open $file]
+    set data [read $f]
+    close $f
+    if {[regexp -line "^${var}='(\[^'\]*)'" $data -> v]} {return $v}
+    return {}
+}
+
+# ------------------------------------------------------------- recipes --
+
+# A recipe evaluates in this namespace; each command fills ::CUR.
+namespace eval rcpdsl {
+    proc version   {v}         {dict set ::CUR version $v}
+    proc source    {kind args} {dict set ::CUR source [linsert $args 0 $kind]}
+    proc buildstyle {s}        {dict set ::CUR buildstyle $s}
+    proc maketarget {t}        {dict set ::CUR maketarget $t}
+    proc requires  {list}      {dict set ::CUR requires $list}
+    proc init      {prefix {safeproc {}}} {
+	dict set ::CUR init $prefix
+	dict set ::CUR safeinit $safeproc
+    }
+    proc libs      {platform flags} {dict set ::CUR libs $platform $flags}
+    proc vfs       {globs}     {dict set ::CUR vfs $globs}
+    proc pkgindex  {text}      {dict set ::CUR pkgindex $text}
+    proc platforms {list}      {dict set ::CUR platforms $list}
+    proc native-tclsh {}       {dict set ::CUR nativetclsh 1}
+}
+
+proc LoadRecipe {path} {
+    set ::CUR [dict create \
+	name [file rootname [file tail $path]] \
+	version {} source {} buildstyle tea maketarget {} requires {} \
+	init {} safeinit {} libs {} vfs {} pkgindex {} \
+	platforms {linux win64} nativetclsh 0]
+    set f [open $path]
+    set body [read $f]
+    close $f
+    namespace eval rcpdsl $body
+    return $::CUR
+}
+
+proc R {name key} {
+    global Recipes
+    dict get [dict get $Recipes $name] $key
+}
+
+# --------------------------------------------------------------- fetch --
+
+proc FetchTarball {url dst log} {
+    file mkdir [file dirname $dst]
+    set tgz $dst.tar.gz
+    Run $log curl -sSL -o $tgz $url
+    set x $dst.extract
+    file delete -force $x
+    file mkdir $x
+    Run $log tar xzf $tgz -C $x
+    set tops [glob -directory $x *]
+    if {[llength $tops] == 1 && [file isdirectory [lindex $tops 0]]} {
+	file rename [lindex $tops 0] $dst
+	file delete -force $x
+    } else {
+	file rename $x $dst
+    }
+}
+
+proc Fetch {name} {
+    global Root Recipes
+    set dst [SrcDir $name]
+    if {[file exists $dst]} {return $dst}
+    set src [R $name source]
+    set log [file join $Root work logs fetch-$name.log]
+    switch -- [lindex $src 0] {
+	tarball {
+	    msg "fetch $name ([lindex $src 1])"
+	    FetchTarball [lindex $src 1] $dst $log
+	}
+	git {
+	    msg "fetch $name (git clone)"
+	    file mkdir [file dirname $dst]
+	    Run $log git clone --depth 1 [lindex $src 1] $dst
+	}
+	tclpkgs {
+	    # Bundled in the Tcl source tarball; no fetch of its own.
+	    Fetch tcl
+	}
+	default {die "recipe $name: unknown source kind '[lindex $src 0]'"}
+    }
+    return $dst
+}
+
+proc SrcDir {name} {
+    global Root Recipes
+    set src [R $name source]
+    if {[lindex $src 0] eq "tclpkgs"} {
+	return [file join [SrcDir tcl] pkgs [lindex $src 1]]
+    }
+    return [file join $Root work src $name]
+}
+
+# --------------------------------------------------------------- build --
+
+proc CoreBuild {name} {
+    # Build Tcl or Tk in-tree (<src>/unix or <src>/win) and install it.
+    global P
+    set bdir [file join [SrcDir $name] [dict get $P subdir]]
+    set log  [file join [dict get $P logs] $name.log]
+    set conf [list ./configure --disable-shared --prefix=[dict get $P inst]]
+    if {[dict get $P host] ne ""} {
+	lappend conf --host=[dict get $P host]
+    }
+    if {$name eq "tk"} {
+	lappend conf --with-tcl=[file join [dict get $P inst] lib]
+    }
+    if {![file exists [file join $bdir Makefile]]} {
+	msg "configure $name"
+	RunIn $bdir $log {*}$conf
+    }
+    msg "make $name"
+    RunIn $bdir $log make -j[dict get $P jobs]
+    RunIn $bdir $log make install
+}
+
+proc ExtBuild {name} {
+    # TEA extension: out-of-tree configure --disable-shared && make.
+    global P Root
+    set bdir [file join [dict get $P builds] $name]
+    set log  [file join [dict get $P logs] $name.log]
+    file mkdir $bdir
+    set conf [list [file join [SrcDir $name] configure] --disable-shared \
+	--with-tcl=[file join [dict get $P inst] lib]]
+    if {"tk" in [R $name requires]} {
+	lappend conf --with-tk=[file join [dict get $P inst] lib]
+    }
+    if {[dict get $P host] ne ""} {
+	lappend conf --host=[dict get $P host]
+    }
+    if {[R $name nativetclsh]} {
+	set ::env(TCLSH_NATIVE) [NativeTclsh]
+    }
+    if {![file exists [file join $bdir Makefile]]} {
+	msg "configure $name"
+	RunIn $bdir $log {*}$conf
+    }
+    msg "make $name"
+    set target [R $name maketarget]
+    RunIn $bdir $log make -j[dict get $P jobs] {*}$target
+    unset -nocomplain ::env(TCLSH_NATIVE)
+}
+
+proc ExtLib {name} {
+    global P
+    set a [Glob1 -directory [file join [dict get $P builds] $name] *.a]
+    if {$a eq ""} {die "no static library found for $name"}
+    return $a
+}
+
+proc NativeTclsh {} {
+    # A zipfs-capable native tclsh: the linux build's own install.
+    global Root
+    set sh [Glob1 [file join $Root work linux install bin tclsh9*]]
+    if {$sh eq ""} {
+	die "native tclsh not found; run a linux build first\
+	    (needed for zipfs mkimg and cross-configure)"
+    }
+    return $sh
+}
+
+# ---------------------------------------------------------- link/image --
+
+proc GenAppinit {exts} {
+    global P Root
+    set externs {}
+    set regs {}
+    foreach name $exts {
+	set prefix [R $name init]
+	if {$prefix eq ""} continue
+	lappend externs "extern Tcl_LibraryInitProc ${prefix}_Init;"
+	set safe [R $name safeinit]
+	if {$safe ne ""} {
+	    lappend externs "extern Tcl_LibraryInitProc $safe;"
+	    lappend regs "    Tcl_StaticLibrary(NULL, \"$prefix\",\
+		${prefix}_Init, $safe);"
+	} else {
+	    lappend regs "    Tcl_StaticLibrary(NULL, \"$prefix\",\
+		${prefix}_Init, NULL);"
+	}
+    }
+    set f [open [file join $Root templates [dict get $P appinit]]]
+    set text [read $f]
+    close $f
+    set text [string map [list @EXTERNS@ [join $externs \n] \
+	@REGISTRATIONS@ [join $regs \n]] $text]
+    set out [file join [dict get $P builds] appinit.c]
+    file mkdir [dict get $P builds]
+    set f [open $out w]
+    puts $f $text
+    close $f
+    return $out
+}
+
+proc Link {exts out} {
+    global P
+    set inst [dict get $P inst]
+    set lib  [file join $inst lib]
+    set cc   [dict get $P cc]
+    set log  [file join [dict get $P logs] link.log]
+    set withtk [expr {"tk" in $exts}]
+
+    set c [GenAppinit $exts]
+    set o [file join [dict get $P builds] appinit.o]
+    msg "compile appinit"
+    Run $log $cc {*}[dict get $P cflags] -I[file join $inst include] \
+	-c -o $o $c
+
+    set objs [list $o]
+    foreach name $exts {
+	if {[R $name buildstyle] ne "tea"} continue
+	lappend objs [ExtLib $name]
+    }
+    set stubs [list [Glob1 -directory $lib libtclstub*.a]]
+    set cores {}
+    if {$withtk} {
+	set stubs [linsert $stubs 0 [Glob1 -directory $lib libtkstub*.a]]
+	lappend cores [Glob1 -directory $lib libtcl9tk*.a]
+	set syslibs [ConfigVar [file join $lib tkConfig.sh] TK_LIBS]
+    } else {
+	set syslibs [ConfigVar [file join $lib tclConfig.sh] TCL_LIBS]
+    }
+    lappend cores [Glob1 -directory $lib libtcl9.0.a]
+    if {[lindex $cores end] eq ""} {
+	lset cores end [Glob1 -directory $lib libtcl90.a]
+    }
+    foreach name $exts {
+	dict for {plat flags} [R $name libs] {
+	    if {$plat eq [dict get $P name]} {lappend syslibs {*}$flags}
+	}
+    }
+    msg "link [file tail $out]"
+    Run $log $cc {*}[dict get $P ldflags] -o $out {*}$objs \
+	{*}$stubs {*}$cores {*}$syslibs
+}
+
+proc Image {exts bare out appdir} {
+    global P
+    set vfs [file join [dict get $P work] vfs]
+    set log [file join [dict get $P logs] image.log]
+    file delete -force $vfs
+    file mkdir [file join $vfs lib]
+
+    # Skeleton: the core build's script-library zip. The Tk zip carries
+    # both tcl_library and tk_library.
+    if {"tk" in $exts} {
+	set zip [Glob1 [file join [SrcDir tk] [dict get $P subdir] libtk9*.zip]]
+    } else {
+	set zip [Glob1 [file join [SrcDir tcl] [dict get $P subdir] libtcl9*.zip]]
+    }
+    if {$zip eq ""} {die "core script-library zip not found"}
+    Run $log unzip -q -d $vfs $zip
+
+    foreach name $exts {
+	set pi [string trim [R $name pkgindex]]
+	if {$pi eq ""} continue
+	set dir [file join $vfs lib $name]
+	file mkdir $dir
+	set f [open [file join $dir pkgIndex.tcl] w]
+	puts $f "# static pkgIndex generated by whalebuild"
+	puts $f $pi
+	close $f
+	foreach pattern [R $name vfs] {
+	    foreach path [glob -nocomplain \
+		    -directory [SrcDir $name] {*}$pattern] {
+		file copy -force $path $dir
+	    }
+	}
+    }
+
+    if {$appdir ne ""} {
+	# Embedded application: contents (incl. main.tcl) at image root.
+	foreach path [glob -nocomplain -directory $appdir *] {
+	    file copy -force $path $vfs
+	}
+    }
+
+    msg "zipfs mkimg [file tail $out]"
+    set script [list zipfs mkimg $out $vfs $vfs {} $bare]
+    Run $log [NativeTclsh] << $script\n
+    file attributes $out -permissions 0o755
+}
+
+# ---------------------------------------------------------------- main --
+
+proc Profile {platform} {
+    global Root
+    set work [file join $Root work $platform]
+    set base [dict create name $platform work $work \
+	inst [file join $work install] builds [file join $work build] \
+	logs [file join $work logs] jobs 4]
+    switch -- $platform {
+	linux {
+	    return [dict merge $base [dict create \
+		subdir unix host {} cc gcc exe {} appinit appinit.c.in \
+		cflags {-O2} ldflags {}]]
+	}
+	win64 {
+	    return [dict merge $base [dict create \
+		subdir win host x86_64-w64-mingw32 \
+		cc x86_64-w64-mingw32-gcc exe .exe \
+		appinit appinit-win.c.in \
+		cflags {-O2 -DUNICODE -D_UNICODE -DSTATIC_BUILD} \
+		ldflags {-municode -mconsole -static-libgcc}]]
+	}
+	default {die "unknown platform '$platform' (linux, win64)"}
+    }
+}
+
+proc BuildCmd {argv} {
+    global Root Recipes P
+    set platform linux
+    set pkgs {tk sqlite3 thread treectrl tls}
+    set appdir {}
+    set out {}
+    set jobs 4
+    foreach {opt val} $argv {
+	switch -- $opt {
+	    -platform {set platform $val}
+	    -pkgs     {set pkgs $val}
+	    -app      {set appdir [file normalize $val]}
+	    -out      {set out [file normalize $val]}
+	    -jobs     {set jobs $val}
+	    default   {die "unknown option '$opt'"}
+	}
+    }
+    set P [Profile $platform]
+    dict set P jobs $jobs
+
+    set Recipes [dict create]
+    foreach path [glob -directory [file join $Root recipes] *.rcp] {
+	set r [LoadRecipe $path]
+	dict set Recipes [dict get $r name] $r
+    }
+    foreach name [concat tcl $pkgs] {
+	if {![dict exists $Recipes $name]} {die "no recipe for '$name'"}
+    }
+
+    # Filter extensions not supported on this platform.
+    set use {}
+    foreach name $pkgs {
+	if {$platform ni [R $name platforms]} {
+	    msg "skipping $name (not supported on $platform)"
+	    continue
+	}
+	lappend use $name
+    }
+
+    if {$appdir ne "" && ![file exists [file join $appdir main.tcl]]} {
+	die "-app dir must contain main.tcl"
+    }
+    if {$out eq ""} {
+	set out [file join [dict get $P work] whale[dict get $P exe]]
+    }
+
+    file mkdir [dict get $P logs]
+    Fetch tcl
+    CoreBuild tcl
+    if {"tk" in $use} {
+	Fetch tk
+	CoreBuild tk
+    }
+    foreach name $use {
+	if {[R $name buildstyle] ne "tea"} continue
+	Fetch $name
+	ExtBuild $name
+    }
+    set bare [file join [dict get $P builds] whale-bare[dict get $P exe]]
+    Link $use $bare
+    Image $use $bare $out $appdir
+    msg "done: $out"
+}
+
+if {[llength $argv] == 0 || [lindex $argv 0] ni {build}} {
+    puts stderr "usage: whalebuild build ?-platform linux|win64?\
+	?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file? ?-jobs N?"
+    exit 2
+}
+BuildCmd [lrange $argv 1 end]

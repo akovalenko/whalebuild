@@ -1,0 +1,8 @@
+# SQLite Tcl extension, bundled in the Tcl source tarball (pkgs/).
+# Single-file amalgamation — the easiest static case there is.
+version 3.53.0
+source tclpkgs sqlite3.53.0
+init Sqlite3
+pkgindex {
+    package ifneeded sqlite3 3.53.0 {load {} Sqlite3}
+}

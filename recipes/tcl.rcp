@@ -1,0 +1,6 @@
+# Tcl core. Special-cased by the driver: built in-tree in <src>/unix or
+# <src>/win, installed into the per-platform prefix. The release tarball
+# also provides pkgs/ (sqlite3, thread, itcl, tdbc) for `source tclpkgs`.
+version 9.0.4
+source tarball https://prdownloads.sourceforge.net/tcl/tcl9.0.4-src.tar.gz
+buildstyle core-tcl

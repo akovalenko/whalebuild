@@ -1,0 +1,12 @@
+# Thread extension, bundled in the Tcl source tarball (pkgs/).
+# Cross-configure packs its script part with zipfs and requires a native
+# Tcl 9 tclsh (TCLSH_NATIVE) — hence the flag; the driver points it at
+# the Linux-built tclsh.
+version 3.0.6
+source tclpkgs thread3.0.6
+native-tclsh
+init Thread
+pkgindex {
+    package ifneeded thread 3.0.6 {load {} Thread}
+    package ifneeded Thread 3.0.6 {package require -exact thread 3.0.6}
+}

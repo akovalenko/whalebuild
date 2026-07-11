@@ -1,0 +1,70 @@
+/*
+ * appinit for a whalebuild kit (win64), after win/tclAppInit.c: UNICODE
+ * _tmain, slashes in argv[0], no CRT globbing. Generated: the driver
+ * fills @EXTERNS@ and @REGISTRATIONS@ from the recipe list.
+ *
+ * Registry and Dde are always registered: in a static build their
+ * objects are folded into libtcl90.a by the stock makefile.
+ */
+
+#include "tcl.h"
+
+#define WIN32_LEAN_AND_MEAN
+#define STRICT
+#include <windows.h>
+#undef STRICT
+#undef WIN32_LEAN_AND_MEAN
+#include <locale.h>
+#include <stdlib.h>
+#include <tchar.h>
+#if defined(__GNUC__)
+int _CRT_glob = 0;
+#endif
+
+extern Tcl_LibraryInitProc Registry_Init;
+extern Tcl_LibraryInitProc Dde_Init;
+extern Tcl_LibraryInitProc Dde_SafeInit;
+
+@EXTERNS@
+
+static int
+Whale_AppInit(
+    Tcl_Interp *interp)
+{
+    if (Tcl_Init(interp) == TCL_ERROR) {
+	return TCL_ERROR;
+    }
+
+    Tcl_StaticLibrary(NULL, "Registry", Registry_Init, NULL);
+    Tcl_StaticLibrary(NULL, "Dde", Dde_Init, Dde_SafeInit);
+
+@REGISTRATIONS@
+
+    /* See the unix template: make lib/<pkg>/ visible to auto_path. */
+    Tcl_EvalEx(interp,
+	    "if {[file isdirectory //zipfs:/app/lib]} {"
+	    " lappend auto_path //zipfs:/app/lib }",
+	    -1, TCL_EVAL_GLOBAL);
+
+    return TCL_OK;
+}
+
+int
+_tmain(
+    int argc,
+    TCHAR *argv[])
+{
+    TCHAR *p;
+
+    setlocale(LC_ALL, "C");
+
+    for (p = argv[0]; *p != '\0'; p++) {
+	if (*p == '\\') {
+	    *p = '/';
+	}
+    }
+
+    TclZipfs_AppHook(&argc, &argv);
+    Tcl_Main(argc, argv, Whale_AppInit);
+    return 0;
+}

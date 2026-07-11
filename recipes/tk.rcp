@@ -1,0 +1,15 @@
+# Tk core. Special-cased by the driver (built in-tree like tcl). Linked
+# statically but initialized lazily: `package require Tk` goes through
+# this pkgindex, which points tk_library into the image first. The Tk
+# build zip carries BOTH tcl_library and tk_library — the driver unzips
+# it as the image skeleton.
+version 9.0.4
+source tarball https://prdownloads.sourceforge.net/tcl/tk9.0.4-src.tar.gz
+buildstyle core-tk
+init Tk Tk_SafeInit
+pkgindex {
+    package ifneeded Tk 9.0.4 {
+	set ::tk_library //zipfs:/app/tk_library
+	load {} Tk
+    }
+}
