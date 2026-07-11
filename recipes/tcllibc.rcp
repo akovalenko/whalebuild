@@ -16,6 +16,7 @@ source from tcllib
 buildstyle critcl
 tool git https://github.com/andreas-kupries/critcl
 native-tclsh
+requires {tcllib}
 platforms {linux}
 init Tcllibc
 ldextra {-Wl,--allow-multiple-definition}

@@ -113,6 +113,39 @@ proc R {name key} {
     dict get [dict get $Recipes $name] $key
 }
 
+proc ReqClosure {name} {
+    # Transitive closure of a recipe's `requires`.
+    set todo [list $name]
+    set seen {}
+    while {[llength $todo]} {
+	set todo [lassign $todo n]
+	foreach r [R $n requires] {
+	    if {$r ni $seen} {lappend seen $r; lappend todo $r}
+	}
+    }
+    return $seen
+}
+
+proc SortByRequires {pkgs} {
+    # Dependencies before dependents (requires outside the set ignored).
+    set order {}
+    set left $pkgs
+    while {[llength $left]} {
+	set next {}
+	set stuck 1
+	foreach n $left {
+	    set ready 1
+	    foreach r [R $n requires] {
+		if {$r in $left} {set ready 0; break}
+	    }
+	    if {$ready} {lappend order $n; set stuck 0} else {lappend next $n}
+	}
+	if {$stuck} {die "circular requires among: $left"}
+	set left $next
+    }
+    return $order
+}
+
 # --------------------------------------------------------------- fetch --
 
 proc FetchTarball {url dst log} {
@@ -379,10 +412,25 @@ proc Link {exts out} {
     set log  [file join [dict get $P logs] link.log]
     set withtk [expr {"tk" in $exts}]
 
+    # On Windows a whale with Tk is a GUI-subsystem binary (wish
+    # model: interactive REPL = Tk's built-in console); without Tk
+    # it is a console one. WHALE_GUI selects the entry point and the
+    # console wiring in the win template.
+    set cflags [dict get $P cflags]
+    set ldflags [dict get $P ldflags]
+    if {[dict get $P name] eq "win64"} {
+	if {$withtk} {
+	    lappend cflags -DWHALE_GUI
+	    lappend ldflags -mwindows
+	} else {
+	    lappend ldflags -mconsole
+	}
+    }
+
     set c [GenAppinit $exts]
     set o [file join [dict get $P builds] appinit.o]
     msg "compile appinit"
-    Run $log $cc {*}[dict get $P cflags] -I[file join $inst include] \
+    Run $log $cc {*}$cflags -I[file join $inst include] \
 	-c -o $o $c
 
     set objs [list $o]
@@ -416,7 +464,7 @@ proc Link {exts out} {
 	}
     }
     msg "link [file tail $out]"
-    Run $log $cc {*}[dict get $P ldflags] {*}$ldextra -o $out {*}$objs \
+    Run $log $cc {*}$ldflags {*}$ldextra -o $out {*}$objs \
 	{*}$stubs {*}$cores {*}$syslibs
 }
 
@@ -485,12 +533,14 @@ proc Profile {platform} {
 		cflags {-O2} ldflags {}]]
 	}
 	win64 {
+	    # The subsystem flag (-mconsole/-mwindows) is decided at
+	    # link time: GUI subsystem when tk is in the set.
 	    return [dict merge $base [dict create \
 		subdir win host x86_64-w64-mingw32 \
 		cc x86_64-w64-mingw32-gcc exe .exe \
 		appinit appinit-win.c.in \
 		cflags {-O2 -DUNICODE -D_UNICODE -DSTATIC_BUILD} \
-		ldflags {-municode -mconsole -static-libgcc}]]
+		ldflags {-municode -static-libgcc}]]
 	}
 	default {die "unknown platform '$platform' (linux, win64)"}
     }
@@ -499,7 +549,8 @@ proc Profile {platform} {
 proc BuildCmd {argv} {
     global Root Recipes P Native
     set platform linux
-    set pkgs {tk sqlite3 thread treectrl tls tcllib tcllibc twapi}
+    set flavor {}
+    set pkgs {}
     set appdir {}
     set out {}
     set jobs 4
@@ -511,6 +562,7 @@ proc BuildCmd {argv} {
 	switch -- $opt {
 	    -platform {set platform $val}
 	    -pkgs     {set pkgs $val}
+	    -flavor   {set flavor $val}
 	    -app      {set appdir [file normalize $val]}
 	    -out      {set out [file normalize $val]}
 	    -jobs     {set jobs $val}
@@ -518,6 +570,10 @@ proc BuildCmd {argv} {
 	    default   {die "unknown option '$opt'"}
 	}
     }
+    if {$flavor ne "" && [llength $pkgs]} {
+	die "-flavor and -pkgs are mutually exclusive"
+    }
+    if {$flavor eq ""} {set flavor all}
     set P [Profile $platform]
     dict set P jobs $jobs
 
@@ -530,7 +586,40 @@ proc BuildCmd {argv} {
 	if {![dict exists $Recipes $name]} {die "no recipe for '$name'"}
     }
 
-    # Filter extensions not supported on this platform.
+    # Resolve the package set: an explicit -pkgs list (completed with
+    # its `requires` closure), or a named flavor over all recipes.
+    if {[llength $pkgs]} {
+	foreach name $pkgs {
+	    foreach r [ReqClosure $name] {
+		if {$r ni $pkgs} {
+		    msg "adding $r (required by $name)"
+		    lappend pkgs $r
+		}
+	    }
+	}
+    } else {
+	set known {}
+	foreach name [lsort [dict keys $Recipes]] {
+	    if {$name ne "tcl"} {lappend known $name}
+	}
+	switch -- $flavor {
+	    all {set pkgs $known}
+	    cli {
+		# Everything that neither is nor needs the GUI core.
+		foreach name $known {
+		    if {$name eq "tk" || "tk" in [ReqClosure $name]} {
+			msg "flavor cli: excluding $name (GUI)"
+			continue
+		    }
+		    lappend pkgs $name
+		}
+	    }
+	    default {die "unknown flavor '$flavor' (all, cli)"}
+	}
+    }
+
+    # Filter extensions not supported on this platform, then order
+    # dependencies before dependents.
     set use {}
     foreach name $pkgs {
 	if {$platform ni [R $name platforms]} {
@@ -539,12 +628,14 @@ proc BuildCmd {argv} {
 	}
 	lappend use $name
     }
+    set use [SortByRequires $use]
 
     if {$appdir ne "" && ![file exists [file join $appdir main.tcl]]} {
 	die "-app dir must contain main.tcl"
     }
+    set suffix [expr {$flavor eq "all" ? "" : "-$flavor"}]
     if {$out eq ""} {
-	set out [file join [dict get $P work] whale[dict get $P exe]]
+	set out [file join [dict get $P work] whale$suffix[dict get $P exe]]
     }
 
     file mkdir [dict get $P logs]
@@ -561,7 +652,7 @@ proc BuildCmd {argv} {
 	    none   {Fetch $name}
 	}
     }
-    set bare [file join [dict get $P builds] whale-bare[dict get $P exe]]
+    set bare [file join [dict get $P builds] whale-bare$suffix[dict get $P exe]]
     Link $use $bare
     Image $use $bare $out $appdir
     msg "done: $out"
@@ -569,8 +660,8 @@ proc BuildCmd {argv} {
 
 if {[llength $argv] == 0 || [lindex $argv 0] ni {build}} {
     puts stderr "usage: whalebuild build ?-platform linux|win64?\
-	?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file? ?-jobs N?\
-	?-native tclsh9?"
+	?-flavor all|cli? ?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file?\
+	?-jobs N? ?-native tclsh9?"
     exit 2
 }
 BuildCmd [lrange $argv 1 end]

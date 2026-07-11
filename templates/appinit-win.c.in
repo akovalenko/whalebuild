@@ -1,13 +1,25 @@
 /*
- * appinit for a whalebuild kit (win64), after win/tclAppInit.c: UNICODE
- * _tmain, slashes in argv[0], no CRT globbing. Generated: the driver
- * fills @EXTERNS@ and @REGISTRATIONS@ from the recipe list.
+ * appinit for a whalebuild kit (win64), after win/tclAppInit.c resp.
+ * win/winMain.c: UNICODE entry, slashes in argv[0], no CRT globbing.
+ * Generated: the driver fills @EXTERNS@ and @REGISTRATIONS@ from the
+ * recipe list, and defines WHALE_GUI when Tk is in the set.
+ *
+ * WHALE_GUI builds are GUI-subsystem (wish model): entered via
+ * wWinMain, driven by Tk_Main. Interactively (no startup script) Tk
+ * comes up eagerly and the REPL is Tk's built-in console
+ * (generic/tkConsole.c + tk_library/console.tcl — already in the
+ * image); Tk_InitConsoleChannels only hijacks std channels that are
+ * actually invalid, so redirected runs keep writing to their files.
+ * With a startup script Tk stays lazy as everywhere else.
  *
  * Registry and Dde are always registered: in a static build their
  * objects are folded into libtcl90.a by the stock makefile.
  */
 
 #include "tcl.h"
+#ifdef WHALE_GUI
+#include "tk.h"
+#endif
 
 #define WIN32_LEAN_AND_MEAN
 #define STRICT
@@ -46,8 +58,62 @@ Whale_AppInit(
 	    " lappend auto_path //zipfs:/app/lib }",
 	    -1, TCL_EVAL_GLOBAL);
 
+#ifdef WHALE_GUI
+    /*
+     * Interactive (no startup script, e.g. a double-click): a GUI
+     * subsystem binary has no usable std channels, so bring Tk up
+     * now and attach the built-in console as the REPL. Script runs
+     * skip this and keep Tk lazy.
+     */
+    if (Tcl_GetStartupScript(NULL) == NULL) {
+	Tcl_SetVar2(interp, "tk_library", NULL,
+		"//zipfs:/app/tk_library", TCL_GLOBAL_ONLY);
+	if (Tk_Init(interp) == TCL_ERROR) {
+	    return TCL_ERROR;
+	}
+	if (Tk_CreateConsoleWindow(interp) == TCL_ERROR) {
+	    return TCL_ERROR;
+	}
+    }
+#endif
+
     return TCL_OK;
 }
+
+#ifdef WHALE_GUI
+
+int APIENTRY
+_tWinMain(
+    HINSTANCE hInstance,
+    HINSTANCE hPrevInstance,
+    LPTSTR lpszCmdLine,
+    int nCmdShow)
+{
+    TCHAR **argv;
+    int argc;
+    TCHAR *p;
+    (void)hInstance;
+    (void)hPrevInstance;
+    (void)lpszCmdLine;
+    (void)nCmdShow;
+
+    setlocale(LC_ALL, "C");
+
+    argc = __argc;
+    argv = __targv;
+
+    for (p = argv[0]; *p != '\0'; p++) {
+	if (*p == '\\') {
+	    *p = '/';
+	}
+    }
+
+    TclZipfs_AppHook(&argc, &argv);
+    Tk_Main(argc, argv, Whale_AppInit);
+    return 0;
+}
+
+#else /* !WHALE_GUI */
 
 int
 _tmain(
@@ -68,3 +134,5 @@ _tmain(
     Tcl_Main(argc, argv, Whale_AppInit);
     return 0;
 }
+
+#endif /* WHALE_GUI */

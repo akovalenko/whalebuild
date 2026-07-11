@@ -73,8 +73,9 @@ if {$tcl_platform(platform) eq "windows"} {
     }
 }
 
-if {$tcl_platform(platform) eq "windows"
-	|| ([info exists env(DISPLAY)] && $env(DISPLAY) ne "")} {
+if {($tcl_platform(platform) eq "windows"
+	|| ([info exists env(DISPLAY)] && $env(DISPLAY) ne ""))
+	&& ![catch {package require Tk}]} {
     check Tk {
 	package require Tk
 	package present Tk
@@ -91,7 +92,7 @@ if {$tcl_platform(platform) eq "windows"
 	set r
     }
 } else {
-    say "skip GUI: no DISPLAY"
+    say "skip GUI: no DISPLAY or Tk not compiled in"
 }
 
 say [expr {$failed ? "SELFTEST FAILED ($failed)" : "SELFTEST PASSED"}]

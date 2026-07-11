@@ -36,6 +36,25 @@ recipes and the driver encode these so users don't have to.
   `Tcl_StaticLibrary` calls) into the platform template. On Windows the
   template also registers `Registry`/`Dde` — in a static build their
   objects are folded into `libtcl90.a` by the stock makefile.
+- **Flavors are computed, not hand-listed.** `-flavor all` (default) =
+  every recipe supported on the platform; `-flavor cli` = all minus tk
+  and minus everything whose `requires` closure reaches tk. Explicit
+  `-pkgs` lists are completed with their requires closure (treectrl
+  pulls tk), and the set is built dependencies-first (topological
+  order over `requires`). Artifacts: `whale` for all, `whale-<flavor>`
+  otherwise.
+- **Windows subsystem follows Tk.** With tk in the set the whale links
+  `-mwindows` and enters via wWinMain/`Tk_Main` (wish model); without —
+  `-mconsole`/`Tcl_Main`. Interactively (no startup script) the GUI
+  whale brings Tk up eagerly and attaches the **built-in console**
+  (`generic/tkConsole.c` + `tk_library/console.tcl`, both already in
+  the static core/image — no tkcon needed) as the REPL; with a script
+  Tk stays lazy as everywhere. `Tk_InitConsoleChannels` (called inside
+  `Tk_MainEx`) only replaces std channels that are actually invalid,
+  so redirected runs keep writing to files — which is what keeps the
+  wine selftest working against a GUI-subsystem exe. Verified under
+  wine: `wine start whale.exe` (double-click simulation, no inherited
+  handles) pops the console REPL.
 
 ## Core (Tcl/Tk 9.0.4)
 

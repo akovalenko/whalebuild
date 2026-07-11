@@ -21,6 +21,11 @@ whalebuild is a thin driver plus per-extension recipes, not a framework.
   Embedding an application is an explicit request (`-app <dir>`).
 - **Tk is lazy**: compiled in, but not initialized until the script asks
   (`package require Tk`). A CLI script never touches X11/GDI.
+- **Windows subsystem follows Tk**: with Tk in the set `whale.exe` is a
+  GUI-subsystem binary (wish model) — run bare / double-clicked it opens
+  Tk's built-in console as the interactive REPL; running a script keeps
+  Tk lazy and redirected output still lands in your files. Without Tk
+  (`-flavor cli`) it is a plain console binary.
 - Static extensions register via `Tcl_StaticLibrary`; their `pkgIndex.tcl`
   and script parts live in the attached image, so plain `package require`
   works.
@@ -31,10 +36,14 @@ whalebuild is a thin driver plus per-extension recipes, not a framework.
 ## Usage
 
 ```sh
-# default battery set, Linux:
+# everything supported on the platform (flavor "all", the default):
 bin/whalebuild build
 
-# pick extensions:
+# no-GUI flavor: excludes tk and everything that requires it:
+bin/whalebuild build -flavor cli        # -> work/linux/whale-cli
+
+# pick extensions (the requires closure is added automatically,
+# e.g. treectrl pulls in tk):
 bin/whalebuild build -pkgs {tk sqlite3 thread}
 
 # win64 cross (requires the Linux build first — its native tclsh
