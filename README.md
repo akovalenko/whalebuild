@@ -85,4 +85,4 @@ self-tests on both platforms. Interfaces (recipe fields, CLI) may change.
 
 ## License
 
-TBD.
+The Unlicense (public domain); see UNLICENSE.

@@ -108,12 +108,13 @@ proc FetchTarball {url dst log} {
     }
 }
 
-proc Fetch {name} {
-    global Root Recipes
-    set dst [SrcDir $name]
+proc FetchCache {name} {
+    # Pristine source tree in the shared cache: fetched once, never built.
+    global Root
+    set dst [file join $Root work cache $name]
     if {[file exists $dst]} {return $dst}
     set src [R $name source]
-    set log [file join $Root work logs fetch-$name.log]
+    set log [file join $Root work cache logs fetch-$name.log]
     switch -- [lindex $src 0] {
 	tarball {
 	    msg "fetch $name ([lindex $src 1])"
@@ -124,22 +125,35 @@ proc Fetch {name} {
 	    file mkdir [file dirname $dst]
 	    Run $log git clone --depth 1 [lindex $src 1] $dst
 	}
-	tclpkgs {
-	    # Bundled in the Tcl source tarball; no fetch of its own.
-	    Fetch tcl
-	}
 	default {die "recipe $name: unknown source kind '[lindex $src 0]'"}
     }
     return $dst
 }
 
+proc Fetch {name} {
+    # Per-platform source tree, copied from the cache. Everything builds
+    # in-tree (out-of-tree builds of third-party extensions used to break
+    # in subtle ways), so each platform owns a full copy it may dirty.
+    global P
+    if {[lindex [R $name source] 0] eq "tclpkgs"} {
+	return [Fetch tcl]
+    }
+    set dst [SrcDir $name]
+    if {[file exists $dst]} {return $dst}
+    set cache [FetchCache $name]
+    file mkdir [file dirname $dst]
+    msg "copy $name into [dict get $P name] tree"
+    file copy $cache $dst
+    return $dst
+}
+
 proc SrcDir {name} {
-    global Root Recipes
+    global P Recipes
     set src [R $name source]
     if {[lindex $src 0] eq "tclpkgs"} {
 	return [file join [SrcDir tcl] pkgs [lindex $src 1]]
     }
-    return [file join $Root work src $name]
+    return [file join [dict get $P work] src $name]
 }
 
 # --------------------------------------------------------------- build --
@@ -166,12 +180,12 @@ proc CoreBuild {name} {
 }
 
 proc ExtBuild {name} {
-    # TEA extension: out-of-tree configure --disable-shared && make.
+    # TEA extension: in-tree configure --disable-shared && make (the tree
+    # is a per-platform copy, so dirtying it is fine).
     global P Root
-    set bdir [file join [dict get $P builds] $name]
+    set bdir [SrcDir $name]
     set log  [file join [dict get $P logs] $name.log]
-    file mkdir $bdir
-    set conf [list [file join [SrcDir $name] configure] --disable-shared \
+    set conf [list ./configure --disable-shared \
 	--with-tcl=[file join [dict get $P inst] lib]]
     if {"tk" in [R $name requires]} {
 	lappend conf --with-tk=[file join [dict get $P inst] lib]
@@ -193,8 +207,7 @@ proc ExtBuild {name} {
 }
 
 proc ExtLib {name} {
-    global P
-    set a [Glob1 -directory [file join [dict get $P builds] $name] *.a]
+    set a [Glob1 -directory [SrcDir $name] *.a]
     if {$a eq ""} {die "no static library found for $name"}
     return $a
 }

@@ -20,6 +20,13 @@ recipes and the driver encode these so users don't have to.
   there is no system OpenSSL; options are shipping the two DLLs next to
   the exe (updatable in place), SChannel via TWAPI, or static (worst for
   updates) — not decided here, the tls recipe is Linux-only for now.
+- **Per-platform source trees, in-tree builds.** Sources are fetched once
+  into `work/cache/` (pristine, never built) and copied per platform;
+  everything builds in-tree. Out-of-tree (VPATH) builds of third-party
+  extensions were a recurring source of subtle breakage in the monster
+  era and buy nothing here — while same-family targets (two unixes) would
+  collide in a shared tree's `unix/` build dir. Disk is cheap; a dirty
+  platform tree is disposable.
 - **Two-phase make for incrementality.** A recursive make caches `.a`
   mtimes before sub-makes update them and would skip the relink; the
   driver therefore runs extension sub-makes first, then a fresh link
