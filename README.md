@@ -62,7 +62,8 @@ pkgindex {package ifneeded sqlite3 3.53.0 {load {} Sqlite3}}
 ```
 
 The default build style is TEA (`configure --disable-shared && make`);
-recipes only state what deviates: extra link libraries per platform,
+recipes only state what deviates: extra configure arguments, extra link
+libraries per platform (`@SRC@` expands to the recipe's source tree),
 script files to wrap into the image, a make target, a native-tclsh
 requirement. See `recipes/*.rcp` and NOTES.md for the details and for the
 field-tested pitfalls each line encodes.
@@ -80,8 +81,9 @@ Testing win64 output needs wine; GUI self-test uses Xvfb if present.
 ## Status
 
 Working proof of concept grown out of a live experiment (2026-07); the
-default battery set (tk, treectrl, sqlite3, thread, tls) builds and
-self-tests on both platforms. Interfaces (recipe fields, CLI) may change.
+default battery set (tk, treectrl, sqlite3, thread, tcllib, plus tls and
+tcllibc on Linux, twapi on Windows) builds and self-tests on both
+platforms. Interfaces (recipe fields, CLI) may change.
 
 ## License
 

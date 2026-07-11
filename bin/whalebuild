@@ -80,6 +80,7 @@ namespace eval rcpdsl {
     proc source    {kind args} {dict set ::CUR source [linsert $args 0 $kind]}
     proc buildstyle {s}        {dict set ::CUR buildstyle $s}
     proc maketarget {t}        {dict set ::CUR maketarget $t}
+    proc confargs  {list}      {dict set ::CUR confargs $list}
     proc requires  {list}      {dict set ::CUR requires $list}
     proc init      {prefix {safeproc {}}} {
 	dict set ::CUR init $prefix
@@ -97,8 +98,8 @@ namespace eval rcpdsl {
 proc LoadRecipe {path} {
     set ::CUR [dict create \
 	name [file rootname [file tail $path]] \
-	version {} source {} buildstyle tea maketarget {} requires {} \
-	init {} safeinit {} libs {} vfs {} pkgindex {} \
+	version {} source {} buildstyle tea maketarget {} confargs {} \
+	requires {} init {} safeinit {} libs {} vfs {} pkgindex {} \
 	platforms {linux win64} nativetclsh 0 tool {} ldextra {}]
     set f [open $path]
     set body [read $f]
@@ -236,6 +237,7 @@ proc ExtBuild {name} {
     if {[dict get $P host] ne ""} {
 	lappend conf --host=[dict get $P host]
     }
+    lappend conf {*}[R $name confargs]
     if {[R $name nativetclsh]} {
 	set ::env(TCLSH_NATIVE) [NativeTclsh]
     }
@@ -406,7 +408,11 @@ proc Link {exts out} {
     }
     foreach name $exts {
 	dict for {plat flags} [R $name libs] {
-	    if {$plat eq [dict get $P name]} {lappend syslibs {*}$flags}
+	    if {$plat ne [dict get $P name]} continue
+	    # @SRC@ -> the recipe's source tree (e.g. an in-tree
+	    # prebuilt library shipped with the extension).
+	    lappend syslibs {*}[string map \
+		[list @SRC@ [SrcDir $name]] $flags]
 	}
     }
     msg "link [file tail $out]"
@@ -493,7 +499,7 @@ proc Profile {platform} {
 proc BuildCmd {argv} {
     global Root Recipes P Native
     set platform linux
-    set pkgs {tk sqlite3 thread treectrl tls tcllib tcllibc}
+    set pkgs {tk sqlite3 thread treectrl tls tcllib tcllibc twapi}
     set appdir {}
     set out {}
     set jobs 4

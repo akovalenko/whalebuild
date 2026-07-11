@@ -60,6 +60,17 @@ if {$tcl_platform(platform) eq "windows"} {
 	load {} Dde
 	package present dde
     }
+    if {![catch {package require twapi_base}]} {
+	check twapi {
+	    package require twapi          ;# meta: all module scripts
+	    if {[twapi::get_current_process_id] != [pid]} {
+		error "pid mismatch"
+	    }
+	    list ver [twapi::get_version -patchlevel] pid [pid]
+	}
+    } else {
+	say "skip twapi: not compiled in"
+    }
 }
 
 if {$tcl_platform(platform) eq "windows"
