@@ -1,0 +1,27 @@
+# tcllibc 2.0 — the critcl-compiled C accelerators for tcllib, linked
+# static. Built from tcllib's tree by sak.tcl via the critcl application
+# (installed automatically as a build-host tool; needs a native Tcl 9).
+#
+# The crooked parts live in the driver's critcl buildstyle: critcl
+# compiles module bodies PIC-only (the archive is assembled from its
+# object cache), and it embeds its own copy of the Tcl stub pointers,
+# colliding with libtclstub.a — hence the ldextra (the copies are
+# identical .bss objects; every reference binds to the survivor).
+#
+# Contract: `load {} Tcllibc` creates the C commands of all modules;
+# sub-packages (md5c, ...) are NOT provided — tcllib modules detect
+# accelerators by command presence; tcllibc itself is provided here.
+version 2.0
+source from tcllib
+buildstyle critcl
+tool git https://github.com/andreas-kupries/critcl
+native-tclsh
+platforms {linux}
+init Tcllibc
+ldextra {-Wl,--allow-multiple-definition}
+pkgindex {
+    package ifneeded tcllibc 2.0 {
+	load {} Tcllibc
+	package provide tcllibc 2.0
+    }
+}

@@ -51,6 +51,27 @@ proc ConfigVar {file var} {
     return {}
 }
 
+proc WithEnv {pairs script} {
+    # Run $script with ::env overrides, restoring the old values after.
+    set saved {}
+    foreach {k v} $pairs {
+	if {[info exists ::env($k)]} {
+	    lappend saved $k [list 1 $::env($k)]
+	} else {
+	    lappend saved $k [list 0 {}]
+	}
+	set ::env($k) $v
+    }
+    try {
+	uplevel 1 $script
+    } finally {
+	foreach {k st} $saved {
+	    lassign $st had old
+	    if {$had} {set ::env($k) $old} else {unset -nocomplain ::env($k)}
+	}
+    }
+}
+
 # ------------------------------------------------------------- recipes --
 
 # A recipe evaluates in this namespace; each command fills ::CUR.
@@ -69,6 +90,8 @@ namespace eval rcpdsl {
     proc pkgindex  {text}      {dict set ::CUR pkgindex $text}
     proc platforms {list}      {dict set ::CUR platforms $list}
     proc native-tclsh {}       {dict set ::CUR nativetclsh 1}
+    proc tool      {kind url}  {dict set ::CUR tool [list $kind $url]}
+    proc ldextra   {flags}     {dict set ::CUR ldextra $flags}
 }
 
 proc LoadRecipe {path} {
@@ -76,7 +99,7 @@ proc LoadRecipe {path} {
 	name [file rootname [file tail $path]] \
 	version {} source {} buildstyle tea maketarget {} requires {} \
 	init {} safeinit {} libs {} vfs {} pkgindex {} \
-	platforms {linux win64} nativetclsh 0]
+	platforms {linux win64} nativetclsh 0 tool {} ldextra {}]
     set f [open $path]
     set body [read $f]
     close $f
@@ -135,8 +158,9 @@ proc Fetch {name} {
     # in-tree (out-of-tree builds of third-party extensions used to break
     # in subtle ways), so each platform owns a full copy it may dirty.
     global P
-    if {[lindex [R $name source] 0] eq "tclpkgs"} {
-	return [Fetch tcl]
+    switch -- [lindex [R $name source] 0] {
+	tclpkgs {return [Fetch tcl]}
+	from    {return [Fetch [lindex [R $name source] 1]]}
     }
     set dst [SrcDir $name]
     if {[file exists $dst]} {return $dst}
@@ -150,10 +174,29 @@ proc Fetch {name} {
 proc SrcDir {name} {
     global P Recipes
     set src [R $name source]
-    if {[lindex $src 0] eq "tclpkgs"} {
-	return [file join [SrcDir tcl] pkgs [lindex $src 1]]
+    switch -- [lindex $src 0] {
+	tclpkgs {return [file join [SrcDir tcl] pkgs [lindex $src 1]]}
+	from    {return [SrcDir [lindex $src 1]]}
     }
     return [file join [dict get $P work] src $name]
+}
+
+proc FetchTool {name} {
+    # A build-host tool a recipe needs (e.g. critcl); pristine cache copy.
+    global Root
+    lassign [R $name tool] kind url
+    set dst [file join $Root work cache tool-$name]
+    if {[file exists $dst]} {return $dst}
+    set log [file join $Root work cache logs tool-$name.log]
+    switch -- $kind {
+	git {
+	    msg "fetch $name build tool (git clone)"
+	    file mkdir [file dirname $dst]
+	    Run $log git clone --depth 1 $url $dst
+	}
+	default {die "recipe $name: unknown tool kind '$kind'"}
+    }
+    return $dst
 }
 
 # --------------------------------------------------------------- build --
@@ -206,21 +249,91 @@ proc ExtBuild {name} {
     unset -nocomplain ::env(TCLSH_NATIVE)
 }
 
+proc CritclBuild {name} {
+    # A critcl collection (tcllibc-style): run the source tree's sak.tcl
+    # to compile via critcl, then assemble a static archive from critcl's
+    # object cache. critcl builds module bodies PIC-only; companions come
+    # in both flavors — prefer non-PIC, fall back to PIC (legal in an
+    # executable). See NOTES.md for the full story.
+    global P Root
+    set bdir [file join [dict get $P builds] $name]
+    set aout [file join $bdir lib$name.a]
+    set log  [file join [dict get $P logs] $name.log]
+    set src  [SrcDir $name]
+    set home [file join $Root work tools home]
+    file mkdir $bdir $home
+
+    # The critcl application, installed once as a build-host tool.
+    set toolpfx   [file join $Root work tools critcl]
+    set critclapp [file join $toolpfx bin critcl]
+    if {![file exists $critclapp]} {
+	set csrc [FetchTool $name]
+	msg "install critcl (build tool)"
+	WithEnv [list HOME $home] {
+	    RunIn $csrc $log [NativeTclsh] build.tcl install --prefix $toolpfx
+	}
+    }
+
+    msg "critcl $name (sak)"
+    WithEnv [list HOME $home \
+	    PATH [file join $toolpfx bin][expr {[info exists ::env(PATH)] ?
+		":$::env(PATH)" : ""}] \
+	    TCLLIBPATH [file join $src modules]] {
+	RunIn $src $log [NativeTclsh] sak.tcl critcl -keep -libdir $bdir
+    }
+
+    set cache [file join $src .critcl]
+    set objs {}
+    foreach pic [lsort [glob -nocomplain -directory $cache *_pic.o]] {
+	set plain [string range $pic 0 end-7].o
+	lappend objs [expr {[file exists $plain] ? $plain : $pic}]
+    }
+    foreach o [lsort [glob -nocomplain -directory $cache *.o]] {
+	if {[string match *_pic.o $o] || $o in $objs} continue
+	lappend objs $o
+    }
+    if {![llength $objs]} {die "$name: no objects in critcl cache $cache"}
+    file delete -force $aout
+    Run $log ar cr $aout {*}$objs
+    Run $log ranlib $aout
+}
+
 proc ExtLib {name} {
+    global P
+    if {[R $name buildstyle] eq "critcl"} {
+	return [file join [dict get $P builds] $name lib$name.a]
+    }
     set a [Glob1 -directory [SrcDir $name] *.a]
     if {$a eq ""} {die "no static library found for $name"}
     return $a
 }
 
+proc ProbeTcl9 {sh} {
+    # Does $sh run Tcl 9 with zipfs? (thread's cross-configure and
+    # `zipfs mkimg` both need exactly that.)
+    set probe {puts [expr {[package vsatisfies [package provide Tcl] 9.0-]
+	&& [llength [info commands zipfs]] > 0}]}
+    if {[catch {exec $sh << $probe\n} out]} {return 0}
+    return [expr {[string trim $out] eq "1"}]
+}
+
 proc NativeTclsh {} {
-    # A zipfs-capable native tclsh: the linux build's own install.
-    global Root
-    set sh [Glob1 [file join $Root work linux install bin tclsh9*]]
-    if {$sh eq ""} {
-	die "native tclsh not found; run a linux build first\
-	    (needed for zipfs mkimg and cross-configure)"
+    # A zipfs-capable native Tcl 9 tclsh: -native / env override first
+    # (any Tcl 9 kit qualifies), then the linux build's own install,
+    # then the PATH.
+    global Root Native
+    if {[info exists ::NativeFound]} {return $::NativeFound}
+    set cands {}
+    if {$Native ne ""} {lappend cands $Native}
+    lappend cands [Glob1 [file join $Root work linux install bin tclsh9*]]
+    lappend cands {*}[auto_execok tclsh9.0]
+    foreach sh $cands {
+	if {$sh eq ""} continue
+	if {[ProbeTcl9 $sh]} {return [set ::NativeFound $sh]}
+	msg "note: $sh is not a zipfs-capable Tcl 9 tclsh, skipping"
     }
-    return $sh
+    die "no native Tcl 9 tclsh found; build linux first or pass\
+	-native <tclsh9-or-kit> (needed for zipfs mkimg and cross-configure)"
 }
 
 # ---------------------------------------------------------- link/image --
@@ -271,9 +384,12 @@ proc Link {exts out} {
 	-c -o $o $c
 
     set objs [list $o]
+    set ldextra {}
     foreach name $exts {
-	if {[R $name buildstyle] ne "tea"} continue
-	lappend objs [ExtLib $name]
+	if {[R $name buildstyle] in {tea critcl}} {
+	    lappend objs [ExtLib $name]
+	}
+	lappend ldextra {*}[R $name ldextra]
     }
     set stubs [list [Glob1 -directory $lib libtclstub*.a]]
     set cores {}
@@ -294,7 +410,7 @@ proc Link {exts out} {
 	}
     }
     msg "link [file tail $out]"
-    Run $log $cc {*}[dict get $P ldflags] -o $out {*}$objs \
+    Run $log $cc {*}[dict get $P ldflags] {*}$ldextra -o $out {*}$objs \
 	{*}$stubs {*}$cores {*}$syslibs
 }
 
@@ -317,14 +433,17 @@ proc Image {exts bare out appdir} {
 
     foreach name $exts {
 	set pi [string trim [R $name pkgindex]]
-	if {$pi eq ""} continue
+	set patterns [R $name vfs]
+	if {$pi eq "" && ![llength $patterns]} continue
 	set dir [file join $vfs lib $name]
 	file mkdir $dir
-	set f [open [file join $dir pkgIndex.tcl] w]
-	puts $f "# static pkgIndex generated by whalebuild"
-	puts $f $pi
-	close $f
-	foreach pattern [R $name vfs] {
+	if {$pi ne ""} {
+	    set f [open [file join $dir pkgIndex.tcl] w]
+	    puts $f "# static pkgIndex generated by whalebuild"
+	    puts $f $pi
+	    close $f
+	}
+	foreach pattern $patterns {
 	    foreach path [glob -nocomplain \
 		    -directory [SrcDir $name] {*}$pattern] {
 		file copy -force $path $dir
@@ -372,12 +491,16 @@ proc Profile {platform} {
 }
 
 proc BuildCmd {argv} {
-    global Root Recipes P
+    global Root Recipes P Native
     set platform linux
-    set pkgs {tk sqlite3 thread treectrl tls}
+    set pkgs {tk sqlite3 thread treectrl tls tcllib tcllibc}
     set appdir {}
     set out {}
     set jobs 4
+    set Native {}
+    if {[info exists ::env(WHALEBUILD_NATIVE_TCLSH)]} {
+	set Native $::env(WHALEBUILD_NATIVE_TCLSH)
+    }
     foreach {opt val} $argv {
 	switch -- $opt {
 	    -platform {set platform $val}
@@ -385,6 +508,7 @@ proc BuildCmd {argv} {
 	    -app      {set appdir [file normalize $val]}
 	    -out      {set out [file normalize $val]}
 	    -jobs     {set jobs $val}
+	    -native   {set Native [file normalize $val]}
 	    default   {die "unknown option '$opt'"}
 	}
     }
@@ -425,9 +549,11 @@ proc BuildCmd {argv} {
 	CoreBuild tk
     }
     foreach name $use {
-	if {[R $name buildstyle] ne "tea"} continue
-	Fetch $name
-	ExtBuild $name
+	switch -- [R $name buildstyle] {
+	    tea    {Fetch $name; ExtBuild $name}
+	    critcl {Fetch $name; CritclBuild $name}
+	    none   {Fetch $name}
+	}
     }
     set bare [file join [dict get $P builds] whale-bare[dict get $P exe]]
     Link $use $bare
@@ -437,7 +563,8 @@ proc BuildCmd {argv} {
 
 if {[llength $argv] == 0 || [lindex $argv 0] ni {build}} {
     puts stderr "usage: whalebuild build ?-platform linux|win64?\
-	?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file? ?-jobs N?"
+	?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file? ?-jobs N?\
+	?-native tclsh9?"
     exit 2
 }
 BuildCmd [lrange $argv 1 end]

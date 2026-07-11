@@ -41,6 +41,16 @@ if {![catch {package require tls}]} {
     say "skip tls: not compiled in"
 }
 
+if {![catch {package require tcllibc}]} {
+    check tcllibc {
+	package require md5
+	list critcl-accel $::md5::accel(critcl) \
+	    md5 [md5::md5 -hex whale]
+    }
+} else {
+    say "skip tcllibc: not compiled in"
+}
+
 if {$tcl_platform(platform) eq "windows"} {
     check registry {
 	load {} Registry

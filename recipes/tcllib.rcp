@@ -1,0 +1,8 @@
+# tcllib 2.0 — pure-Tcl module library; also the source tree the tcllibc
+# recipe builds from. Nothing to compile; wraps a small demo subset of
+# script modules into the image (extend `vfs` to taste — the md5 module
+# doubles as the tcllibc accelerator check in the selftest).
+version 2.0
+source tarball https://core.tcl-lang.org/tcllib/tarball/tcllib-2-0/tcllib.tar.gz
+buildstyle none
+vfs {modules/md5/*.tcl}
