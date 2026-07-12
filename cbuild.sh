@@ -57,11 +57,22 @@ mkdir -p "$HERE/work-$leg"
 
 tty=
 [ -t 0 ] && tty=-it
+
+# Forward the driver's own WHALEBUILD_* env into the container: podman
+# run does NOT inherit the host environment, so a plain
+# `WHALEBUILD_CORE_CFLAGS=-DPURIFY ./cbuild.sh win64` would otherwise
+# reach the driver as unset and silently build a stock kit. `-e NAME`
+# (no =value) passes the value through from cbuild.sh's own env.
+fwd=
+for v in $(env | sed -n 's/^\(WHALEBUILD_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    fwd="$fwd -e $v"
+done
+
 crun() {
     # ${CBUILD_OPTS} after the defaults, so e.g. -e HOME=... in it
     # overrides ours (later podman flags win).
     podman run --rm $tty --userns=keep-id -e HOME=/tmp \
-        ${CBUILD_OPTS:-} \
+        $fwd ${CBUILD_OPTS:-} \
         -v "$HERE:/w" -v "$HERE/work-$leg:/w/work" -w /w \
         "$img" "$@"
 }
