@@ -1,18 +1,6 @@
 --- a/generic/udp_tcl.c
 +++ b/generic/udp_tcl.c
-@@ -1050,15 +1050,22 @@
- 	packets->actual_size = bufSize;
-     }
-     memcpy(buf, packets->message, packets->actual_size);
--    /* VERY TRICKY: add null-terminating byte, we reserved MAXBUFFERSIZE+1 */
--    if (packets->actual_size <= bufSize) {
-+    /* buf is Tcl's channel buffer of capacity bufSize - the "+1
-+     * reserved" only ever applied to this extension's own receive
-+     * buffer, so terminate only when the byte fits. */
-+    if (packets->actual_size < bufSize) {
- 	buf[packets->actual_size] = '\0';
-     }
-     Tcl_Free((char *) packets->message);
+@@ -1058,7 +1058,12 @@
      UDPTRACE("udp_recv message with %d bytes", packets->actual_size);
  
      bufSize = packets->actual_size;

@@ -239,11 +239,25 @@ recipes and the driver encode these so users don't have to.
     validate on` armed just before the udp check narrowed it to one
     statement: validation clean at the :1054 Tcl_Free, panic at the
     :1061 Tcl_Free, the strncpy the only write between. Fixed in
-    patches/udp/win32-recv-overflows.patch together with the
-    adjacent off-by-one (`buf[actual_size] = '\0'` at actual_size ==
-    bufSize writes past Tcl's channel buffer). A/B on the identical
-    MEM_DEBUG kit: 12/12 CRASH unfixed → 8/8 PASS fixed. Worth
-    upstreaming to tcludp.
+    patches/udp/win32-recv-peerhost-overflow.patch. A/B on the
+    identical MEM_DEBUG kit: 12/12 CRASH unfixed → 8/8 PASS fixed.
+    Worth upstreaming to tcludp (still present on fossil tip, our
+    patch applies there).
+  - NOT a second bug (correction — an earlier note overstated it,
+    Anton caught it): the adjacent `buf[actual_size] = '\0'` at
+    actual_size == bufSize is INTENTIONAL and safe, not an off-by-one.
+    Read what the author did: the channel is created with
+    `Tcl_SetChannelBufferSize(chan, MAXBUFFERSIZE)` and the recv path
+    reserves the terminator slot (the function header even says "buf
+    is allocated ... with MAXBUFFERSIZE+1"). actual_size is clamped to
+    bufSize, so the write is bounded; and buf is Tcl's channel buffer,
+    which AllocChannelBuffer over-allocates by a 16-byte BUFFER_PADDING
+    tail anyway — the byte never reaches the block's MEM_DEBUG guard
+    and was NOT what the validation caught. So the patch does NOT touch
+    that line (an earlier draft's `<=`→`<` was meddling with working,
+    deliberate code — dropped). Only the strncpy is wrong. Lesson:
+    before calling something an OOB write, read the buffer's real
+    allocation AND the author's intent, not just the nominal size.
   - Debug-info workflow: DWARF rides by default — WHALEBUILD_CFLAGS
     defaults to -gdwarf-4 (BuildCmd), reaching the core, every TEA
     extension and appinit, on top of the unchanged -O2: codegen and
