@@ -187,7 +187,8 @@ recipes and the driver encode these so users don't have to.
     absence of the bug; wine is as legitimate a winapi implementor
     as any (a wine contract violation, if ever shown, would relocate
     the blame — none is shown).
-  - ROOT CAUSE (2026-07-12, evening): upstream ticket [06f19cc401]
+  - ROOT CAUSE CANDIDATE, later disproven by A/B (2026-07-12,
+    evening): upstream ticket [06f19cc401]
     "socket_*-12.3 crashes on Windows 11". Tcl's Windows socket
     implementation runs a helper "socket thread" that sees per-thread
     socket state through a shared list; on Tcl-thread exit,
@@ -206,7 +207,43 @@ recipes and the driver encode these so users don't have to.
     _WIN32, merge 8f4e1bf7e5); deliberately NOT backported to 9.0.x
     ("needs substantial airtime"). Candidate whalebuild response:
     carry that one-liner as a core patch on 9.0.4 and A/B the
-    selftest loop under wine.
+    selftest loop under wine. THE A/B REFUTED IT: a kit carrying the
+    backport (verified patched by source marker + tclIO.o mtime)
+    crashed the same way. The backport stays (a real upstream bug
+    our tls check exercises), but it is not this flake. A second
+    backport rode along the same day — [e55a589d2b], TlsFree of the
+    process TSD key during finalization with worker threads still
+    alive (matches PASSED-then-die-on-exit crashes; also main-only).
+    Mirror trap recorded for both: `git branch --contains` claims
+    the 9.0 branch has these fixes — fossil-mirror merge marks lie,
+    the branch TREE contains neither; verify by content.
+  - ROOT CAUSE, CONFIRMED (2026-07-12, night): tcludp's win32 packet
+    drain. udp_tcl.c:
+
+        strncpy(statePtr->peerhost, packets->r_host, NI_MAXHOST);
+
+    peerhost is char[256], NI_MAXHOST is 1025 on Windows, and
+    strncpy ZERO-PADS to n — every datagram received on Windows
+    wrote host + ~1016 zero bytes: the tail of UdpState plus ~770
+    bytes of the next heap block(s). One overflow explains every
+    corpse of the hunt: zeroed literal-table Tcl_Objs (bytes==NULL
+    && typePtr==NULL — both winedbg backtraces), zippy TclpAlloc
+    NULL-reads (the original ~50% twapi-check flake: zeroed
+    per-thread freelists), ntdll RtlHeap faults, and the exit-path
+    deaths; detonation wanders with heap layout/load/scheduling
+    (hence pipe-vs-file stdout sensitivity and why reduced probes
+    never fired). Win32-only path — the linux leg was never sick
+    and wine is fully exonerated: real Windows bleeds identically.
+    Method: TCL_MEM_DEBUG kit (guards made it deterministic — the
+    corruption was detected at udpClose EVERY run) + `memory
+    validate on` armed just before the udp check narrowed it to one
+    statement: validation clean at the :1054 Tcl_Free, panic at the
+    :1061 Tcl_Free, the strncpy the only write between. Fixed in
+    patches/udp/win32-recv-overflows.patch together with the
+    adjacent off-by-one (`buf[actual_size] = '\0'` at actual_size ==
+    bufSize writes past Tcl's channel buffer). A/B on the identical
+    MEM_DEBUG kit: 12/12 CRASH unfixed → 8/8 PASS fixed. Worth
+    upstreaming to tcludp.
   - Debug-info workflow: DWARF rides by default — WHALEBUILD_CFLAGS
     defaults to -gdwarf-4 (BuildCmd), reaching the core, every TEA
     extension and appinit, on top of the unchanged -O2: codegen and
