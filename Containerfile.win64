@@ -28,7 +28,7 @@ FROM docker.io/library/archlinux:latest
 # TCL build tree) is broken in an installed-tree build.
 RUN pacman -Syu --noconfirm \
     && pacman -S --noconfirm --needed \
-        mingw-w64-gcc gcc make git curl zip unzip rsync p7zip perl \
+        mingw-w64-gcc gcc make git curl zip unzip rsync p7zip perl patch \
     && rm -rf /var/cache/pacman/pkg/*
 
 RUN curl -fL -o /tmp/tcl.tar.gz \

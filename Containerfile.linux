@@ -33,7 +33,7 @@ FROM docker.io/library/ubuntu:22.04
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         tcl gcc make git curl ca-certificates \
-        tar gzip zip unzip rsync p7zip-full \
+        tar gzip zip unzip rsync p7zip-full patch \
         libssl-dev uuid-dev zlib1g-dev \
         libx11-dev libxext-dev libxft-dev libxcursor-dev \
         xvfb xauth fonts-dejavu-core \
