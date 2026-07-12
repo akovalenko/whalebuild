@@ -1,8 +1,24 @@
-# tcllib 2.0 — pure-Tcl module library; also the source tree the tcllibc
-# recipe builds from. Nothing to compile; wraps a small demo subset of
-# script modules into the image (extend `vfs` to taste — the md5 module
-# doubles as the tcllibc accelerator check in the selftest).
+# tcllib 2.0 — pure-Tcl module library, wrapped WHOLE; also the source
+# tree the tcllibc recipe builds from. Nothing to compile: the vfs glob
+# copies every module directory (file copy recurses), vfsprune drops
+# what is never needed at runtime (tests, manpages, benchmarks and the
+# build/ leftovers — those alone are ~37 MB of the 56 MB tree).
+#
+# Module pkgIndex.tcl files end up two levels below the auto_path entry
+# (lib/tcllib/<module>/), where the package scan does not look, so the
+# generated top index sources them all with $dir rebound to the module
+# dir — every ifneeded registers on the first scan, no auto_path games.
+# The md5 module doubles as the tcllibc accelerator check in selftest.
 version 2.0
 source tarball https://core.tcl-lang.org/tcllib/tarball/tcllib-2-0/tcllib.tar.gz
 buildstyle none
-vfs {modules/md5/*.tcl}
+vfs {modules/*}
+vfsprune {*.test *.man *.bench build}
+pkgindex {
+    apply {{dir} {
+	foreach idx [lsort [glob -nocomplain -directory $dir */pkgIndex.tcl]] {
+	    set dir [file dirname $idx]
+	    source -encoding utf-8 $idx
+	}
+    }} $dir
+}

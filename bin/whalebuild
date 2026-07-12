@@ -88,6 +88,7 @@ namespace eval rcpdsl {
     }
     proc libs      {platform flags} {dict set ::CUR libs $platform $flags}
     proc vfs       {globs}     {dict set ::CUR vfs $globs}
+    proc vfsprune  {globs}     {dict set ::CUR vfsprune $globs}
     proc pkgindex  {text}      {dict set ::CUR pkgindex $text}
     proc platforms {list}      {dict set ::CUR platforms $list}
     proc native-tclsh {}       {dict set ::CUR nativetclsh 1}
@@ -99,7 +100,7 @@ proc LoadRecipe {path} {
     set ::CUR [dict create \
 	name [file rootname [file tail $path]] \
 	version {} source {} buildstyle tea maketarget {} confargs {} \
-	requires {} init {} safeinit {} libs {} vfs {} pkgindex {} \
+	requires {} init {} safeinit {} libs {} vfs {} vfsprune {} pkgindex {} \
 	platforms {linux win64} nativetclsh 0 tool {} ldextra {}]
     set f [open $path]
     set body [read $f]
@@ -491,6 +492,25 @@ proc Link {exts out} {
 	{*}$stubs {*}$cores {*}$syslibs
 }
 
+proc PruneTree {dir patterns} {
+    # Drop files/dirs whose tail matches a `vfsprune` pattern: wrapping
+    # whole directories (vfs {modules/*}) keeps package layouts intact
+    # but drags tests/docs/build leftovers along — this trims them.
+    foreach path [glob -nocomplain -directory $dir *] {
+	set pruned 0
+	foreach p $patterns {
+	    if {[string match $p [file tail $path]]} {
+		file delete -force $path
+		set pruned 1
+		break
+	    }
+	}
+	if {!$pruned && [file isdirectory $path]} {
+	    PruneTree $path $patterns
+	}
+    }
+}
+
 proc Image {exts bare out appdir} {
     global P
     set vfs [file join [dict get $P work] vfs]
@@ -525,6 +545,9 @@ proc Image {exts bare out appdir} {
 		    -directory [SrcDir $name] {*}$pattern] {
 		file copy -force $path $dir
 	    }
+	}
+	if {[llength [R $name vfsprune]]} {
+	    PruneTree $dir [R $name vfsprune]
 	}
     }
 
