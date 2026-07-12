@@ -19,7 +19,7 @@ maketarget binaries
 ingredient openssl-win64 win64 {
     source tarball https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz
     build {
-	./Configure mingw64 no-shared no-apps no-docs no-tests \
+	./Configure mingw64 no-shared no-apps no-docs no-tests no-legacy \
 	    --prefix=@OUT@ --libdir=lib \
 	    --cross-compile-prefix=x86_64-w64-mingw32-
 	make -j@JOBS@
