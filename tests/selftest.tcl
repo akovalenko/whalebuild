@@ -269,6 +269,16 @@ if {($tcl_platform(platform) eq "windows"
     } else {
 	say "skip bwidget: not compiled in"
     }
+    if {![catch {package require awdark}]} {
+	check awthemes {
+	    ttk::style theme use awdark
+	    set r [ttk::style theme use]
+	    ttk::style theme use default
+	    set r
+	}
+    } else {
+	say "skip awthemes: not compiled in"
+    }
     if {![catch {package require ctext}]} {
 	check tklib {
 	    # ctext stands in for the whole script library

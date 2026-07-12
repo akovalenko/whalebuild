@@ -13,7 +13,8 @@ itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
 (1.3 → 2.1.1, all format handlers incl. the four codec support
 packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13),
 Tkhtml (3.0 → 3.0.2, BAWT snapshot), bwidget (1.x → 1.10.1),
-tklib (0.5 → 0.9).
+tklib (0.5 → 0.9), awthemes 10.4.0 (replacing the ttk-theme zoo;
+scalable variants want a future tksvg battery).
 
 ## Easy wins — bundled in the Tcl 9 tarball (`source tclpkgs`)
 
@@ -21,10 +22,11 @@ tklib (0.5 → 0.9).
 - **tdbc** + **tdbcodbc** (was 1.0b14) — also in `pkgs/`; sqlite
   backend (`tdbcsqlite3`) is pure script on top of sqlite3.
 
-## Easy wins — pure script (`buildstyle none` + vfs globs)
+## Easy wins
 
-- **ttk themes** (aquativo, black, keramik ×2, plastik, winxpblue) —
-  modern equivalent: awthemes / ttk-themes collections, pure script.
+- **tksvg** (auriocus) — svg photo image type; not in the monster
+  set, but unlocks awthemes' scalable variants and svg icons
+  generally. TEA, check Tcl 9.
 
 ## C extensions with a live upstream — port next
 

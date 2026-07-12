@@ -1,0 +1,15 @@
+# awthemes 10.4.0 — the modern ttk theme collection (awdark, awlight,
+# awbreeze, ...; successor to the monster-era aquativo/keramik/plastik
+# zoo). Pure script with a self-contained pkgIndex.tcl (source only,
+# no load) — wrapped whole like bwidget, no recipe pkgindex. The
+# pinned source is BAWT's 7z mirror (upstream SourceForge ships zip,
+# a kind the driver doesn't do). Theme images live in i/.
+# Without tksvg the scalable theme variants refuse to load by design;
+# awdark/awlight fall back to their classic bitmap versions — a tksvg
+# battery would upgrade the whole set in place.
+version 10.4.0
+source 7z https://bawt.tcl3d.org/download/InputLibs/awthemes-10.4.0.7z
+requires tk
+buildstyle none
+vfs {*}
+vfsprune {demo*.tcl awthemes.n7 README.txt}
