@@ -884,12 +884,20 @@ proc Profile {platform} {
 	win64 {
 	    # The subsystem flag (-mconsole/-mwindows) is decided at
 	    # link time: GUI subsystem when tk is in the set.
+	    # -static: posix-threads mingw builds (Arch et al.) otherwise
+	    # link libwinpthread-1.dll DYNAMICALLY — -static-libgcc does
+	    # not cover it — and the single-file whale dies on load
+	    # (c0000135) on any machine without that DLL in the path.
+	    # win32-threads toolchains (Debian/Ubuntu mingw) never import
+	    # it, which is why this stayed invisible until an Arch build.
+	    # Import libraries for system DLLs are archives, so -static
+	    # does not affect them.
 	    return [dict merge $base [dict create \
 		subdir win host x86_64-w64-mingw32 \
 		cc x86_64-w64-mingw32-gcc exe .exe \
 		appinit appinit-win.c.in \
 		cflags {-O2 -DUNICODE -D_UNICODE -DSTATIC_BUILD} \
-		ldflags {-municode -static-libgcc}]]
+		ldflags {-municode -static-libgcc -static}]]
 	}
 	default {die "unknown platform '$platform' (linux, win64)"}
     }
