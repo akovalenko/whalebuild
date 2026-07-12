@@ -75,10 +75,10 @@ if {$tcl_platform(platform) eq "windows"} {
 
 if {($tcl_platform(platform) eq "windows"
 	|| ([info exists env(DISPLAY)] && $env(DISPLAY) ne ""))
-	&& ![catch {package require Tk}]} {
+	&& ![catch {package require tk}]} {
     check Tk {
-	package require Tk
-	package present Tk
+	package require Tk     ;# deprecated capitalized alias
+	list tk [package present tk] Tk [package present Tk]
     }
     check treectrl {
 	package require treectrl
