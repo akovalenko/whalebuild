@@ -166,6 +166,40 @@ recipes and the driver encode these so users don't have to.
     WHALEBUILD_CORE_CFLAGS (CoreBuild) for anyone who needs a
     zippy-free kit; NOT made the default — zippy is the faster
     allocator for threaded Tcl and the fault is unproven off wine.
+  - DISPROVEN (2026-07-12, hours later): a fresh PURIFY kit faulted on
+    its first selftest run — a near-NULL read again, now inside
+    `Tcl_GetStringFromObj` (`typePtr->updateStringProc` off a NULL
+    typePtr). The winedbg backtrace runs entirely on the MAIN thread:
+    `Tcl_FSEvalFileEx → TclEvalEx → SelectPackage (package require) →
+    compile → TclRegisterLiteral → TclCreateLiteral → fault` — i.e.
+    the compiler walked the interp's GLOBAL literal table and hit an
+    entry whose Tcl_Obj has `bytes == NULL && typePtr == NULL`, a
+    state no live literal can be in: freed (or scribbled) memory
+    still chained in a bucket. So zippy was the crime scene, not the
+    culprit: with zippy the stomped heap surfaced inside TclpAlloc's
+    per-thread cache, with plain malloc it surfaces at the use site;
+    the 8/8 PURIFY pass was luck, not exoneration. Working theory: a
+    premature/racing free (Tcl_Obj refcounts are plain non-atomic
+    ints — sharing an obj across threads is a bug wherever it hides)
+    corrupting the heap under wine's thread scheduling. And since
+    this is a memory-safety race in the code, wine merely exposes
+    it — a pass on real Windows would mean friendlier timings, not
+    absence of the bug; wine is as legitimate a winapi implementor
+    as any (a wine contract violation, if ever shown, would relocate
+    the blame — none is shown).
+  - Debug-info workflow: `WHALEBUILD_CFLAGS=-g ./cbuild.sh win64`
+    (after wiping the platform work tree — flags bake at configure
+    time) builds the whole kit — core, TEA extensions, appinit —
+    with DWARF on top of the unchanged -O2, so codegen and timings
+    stay representative of the flaking binary. cbuild.sh forwards
+    WHALEBUILD_* into the container. A wine fault address then
+    resolves offline: `addr2line -f -e whale.exe 0x140691A64` (the
+    exe is never stripped — the linker already keeps the symtab;
+    -g adds file:line). Escalation knob for the free-side of a UAF:
+    `WHALEBUILD_CFLAGS='-g -DTCL_MEM_DEBUG'` — the WHOLE kit must
+    share the define (core-only would mismatch guarded/unguarded
+    blocks across the stubs boundary); it panics at the bogus free,
+    not at the corpse.
 
 ## TWAPI (win64-only)
 

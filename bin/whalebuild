@@ -83,6 +83,17 @@ proc WithEnv {pairs script} {
     }
 }
 
+proc ExtraCflags {args} {
+    # Space-joined values of the given env vars, unset/empty skipped.
+    set vals {}
+    foreach v $args {
+	if {[info exists ::env($v)] && $::env($v) ne ""} {
+	    lappend vals $::env($v)
+	}
+    }
+    return [join $vals]
+}
+
 # ------------------------------------------------------------- recipes --
 
 # A recipe evaluates in this namespace; each command fills ::CUR.
@@ -369,14 +380,18 @@ proc CoreBuild {name} {
     if {$name eq "tk"} {
 	lappend conf --with-tcl=[file join [dict get $P inst] lib]
     }
-    # WHALEBUILD_CORE_CFLAGS: extra CFLAGS for the Tcl/Tk core build
-    # only (TEA keeps its own -O2 in CFLAGS_DEFAULT and appends this).
-    # For experiments on the core — e.g. -DPURIFY to drop the zippy
-    # threaded allocator, -fsanitize=..., -g. Empty/unset = untouched.
-    if {[info exists ::env(WHALEBUILD_CORE_CFLAGS)]
-	    && $::env(WHALEBUILD_CORE_CFLAGS) ne ""} {
-	lappend conf CFLAGS=$::env(WHALEBUILD_CORE_CFLAGS)
-    }
+    # WHALEBUILD_CFLAGS: extra CFLAGS for everything whalebuild
+    # compiles (core, TEA extensions, appinit) — e.g. -g for debug
+    # info on top of the untouched default -O2 (TEA keeps its own
+    # optimization in CFLAGS_DEFAULT and appends user CFLAGS).
+    # WHALEBUILD_CORE_CFLAGS: ditto, Tcl/Tk core only — for core
+    # experiments like -DPURIFY or -fsanitize=... . Both bake in at
+    # configure time: an already-configured tree keeps its Makefile,
+    # so wipe the platform work tree for a change to take effect.
+    # Neither reaches critcl builds (tcllibc) or `ingredient` shell
+    # scripts — those own their flags.
+    set extra [ExtraCflags WHALEBUILD_CFLAGS WHALEBUILD_CORE_CFLAGS]
+    if {$extra ne ""} {lappend conf CFLAGS=$extra}
     if {![file exists [file join $bdir Makefile]]} {
 	msg "configure $name"
 	RunIn $bdir $log {*}$conf
@@ -417,6 +432,19 @@ proc ExtBuild {name} {
 	    }
 	    lappend conf {*}[string map \
 		[list @CACHE@ [file join $Root work cache]] $flags]
+	}
+    }
+    # WHALEBUILD_CFLAGS reaches every TEA extension too (see CoreBuild);
+    # folded into a recipe's own CFLAGS= confarg when it has one (tkhtml,
+    # udp) — a second assignment would silently win (autoconf keeps the
+    # last one), dropping the recipe's flags.
+    set extra [ExtraCflags WHALEBUILD_CFLAGS]
+    if {$extra ne ""} {
+	set i [lsearch -glob $conf CFLAGS=*]
+	if {$i >= 0} {
+	    lset conf $i "[lindex $conf $i] $extra"
+	} else {
+	    lappend conf CFLAGS=$extra
 	}
     }
     if {[R $name nativetclsh]} {
@@ -601,6 +629,7 @@ proc Link {exts out} {
     # it is a console one. WHALE_GUI selects the entry point and the
     # console wiring in the win template.
     set cflags [dict get $P cflags]
+    lappend cflags {*}[ExtraCflags WHALEBUILD_CFLAGS]
     set ldflags [dict get $P ldflags]
     if {[dict get $P name] eq "win64"} {
 	if {$withtk} {
