@@ -281,12 +281,14 @@ proc Fetch {name} {
 	    Run [file join [dict get $P logs] sync-$name.log] \
 		rsync -a --checksum $cache/ $dst/
 	}
+	ApplyPatches $name $dst
 	return $dst
     }
     set cache [FetchCache $name]
     file mkdir [file dirname $dst]
     msg "copy $name into [dict get $P name] tree"
     file copy $cache $dst
+    ApplyPatches $name $dst
     return $dst
 }
 
@@ -298,6 +300,29 @@ proc SrcDir {name} {
 	from    {return [SrcDir [lindex $src 1]]}
     }
     return [file join [dict get $P work] src $name]
+}
+
+proc ApplyPatches {name dst} {
+    # patches/<name>/*.patch, lexical order, -p1 against the recipe's
+    # per-platform source copy (so the shared cache stays pristine).
+    # Runs on every Fetch and is idempotent: a patch that already sits
+    # in the tree (reverse dry-run applies cleanly) is skipped — this
+    # both spares an existing tree a wipe when a patch is added, and
+    # re-applies after -update's rsync from the pristine cache reverts
+    # patched files. NB `tclpkgs`/`from` recipes share the owner's
+    # tree: patch them under the OWNER's name (patches/tcl/...).
+    global Root P
+    foreach p [lsort [glob -nocomplain \
+	    -directory [file join $Root patches $name] *.patch]] {
+	set log [file join [dict get $P logs] patch-$name.log]
+	file mkdir [file dirname $log]
+	if {![catch {exec patch -p1 --dry-run --force -R -i $p -d $dst \
+		>& $log}]} {
+	    continue	;# reverse-applies cleanly = already in
+	}
+	msg "patch $name ([file tail $p])"
+	Run $log patch -p1 --force -i $p -d $dst
+    }
 }
 
 proc FetchTool {name} {
@@ -381,9 +406,10 @@ proc CoreBuild {name} {
 	lappend conf --with-tcl=[file join [dict get $P inst] lib]
     }
     # WHALEBUILD_CFLAGS: extra CFLAGS for everything whalebuild
-    # compiles (core, TEA extensions, appinit) — e.g. -g for debug
-    # info on top of the untouched default -O2 (TEA keeps its own
-    # optimization in CFLAGS_DEFAULT and appends user CFLAGS).
+    # compiles (core, TEA extensions, appinit) — defaults to
+    # -gdwarf-4 (set in BuildCmd): debug info on top of the untouched
+    # default -O2 (TEA keeps its own optimization in CFLAGS_DEFAULT
+    # and appends user CFLAGS).
     # WHALEBUILD_CORE_CFLAGS: ditto, Tcl/Tk core only — for core
     # experiments like -DPURIFY or -fsanitize=... . Both bake in at
     # configure time: an already-configured tree keeps its Makefile,
@@ -916,6 +942,7 @@ proc Profile {platform} {
 	linux {
 	    return [dict merge $base [dict create \
 		subdir unix host {} cc gcc exe {} appinit appinit.c.in \
+		objcopy objcopy \
 		cflags {-O2} ldflags {}]]
 	}
 	win64 {
@@ -932,6 +959,7 @@ proc Profile {platform} {
 	    return [dict merge $base [dict create \
 		subdir win host x86_64-w64-mingw32 \
 		cc x86_64-w64-mingw32-gcc exe .exe \
+		objcopy x86_64-w64-mingw32-objcopy \
 		appinit appinit-win.c.in \
 		cflags {-O2 -DUNICODE -D_UNICODE -DSTATIC_BUILD} \
 		ldflags {-municode -static-libgcc -static}]]
@@ -942,6 +970,18 @@ proc Profile {platform} {
 
 proc BuildCmd {argv} {
     global Root Recipes P Native Update
+    # Debug info rides by default: DWARF is free at run time (codegen
+    # untouched — deliberately unlike -DTCL_MEM_DEBUG-style knobs whose
+    # timing shifts can hide the very races being hunted), and the
+    # canonical whale is stripped of it anyway — a full -debug twin is
+    # emitted next to it (see the end of this proc). -gdwarf-4 rather
+    # than plain -g: deterministic across gcc versions (gcc 14 flips
+    # the default to DWARF 5) and digestible by every consumer around
+    # (winedbg, addr2line, gdb). Override via WHALEBUILD_CFLAGS; set
+    # it EMPTY to disable entirely.
+    if {![info exists ::env(WHALEBUILD_CFLAGS)]} {
+	set ::env(WHALEBUILD_CFLAGS) -gdwarf-4
+    }
     set platform linux
     set flavor {}
     set pkgs {}
@@ -1063,8 +1103,26 @@ proc BuildCmd {argv} {
     }
     set bare [file join [dict get $P builds] whale-bare$suffix[dict get $P exe]]
     Link $use $bare
-    Image $use $bare $out $appdir
-    msg "done: $out"
+    # Dual outputs: the canonical whale is stripped of debug sections
+    # (the linker symtab stays — function-level symbolization has paid
+    # for itself); its -debug twin keeps the full DWARF. Identical
+    # codegen, the twin is just heavier on disk. Stripping happens on
+    # the BARE binary: stripping after the zipfs image is attached
+    # would drop the appended archive.
+    set bstrip [file join [dict get $P builds] \
+	whale-bare$suffix-stripped[dict get $P exe]]
+    msg "strip [file tail $bstrip]"
+    Run [file join [dict get $P logs] strip.log] \
+	[dict get $P objcopy] --strip-debug $bare $bstrip
+    set ext [dict get $P exe]
+    if {$ext ne "" && [string match *$ext $out]} {
+	set outdebug [string range $out 0 end-[string length $ext]]-debug$ext
+    } else {
+	set outdebug $out-debug
+    }
+    Image $use $bstrip $out $appdir
+    Image $use $bare $outdebug $appdir
+    msg "done: $out (debug twin: [file tail $outdebug])"
 }
 
 switch -- [lindex $argv 0] {

@@ -207,19 +207,25 @@ recipes and the driver encode these so users don't have to.
     ("needs substantial airtime"). Candidate whalebuild response:
     carry that one-liner as a core patch on 9.0.4 and A/B the
     selftest loop under wine.
-  - Debug-info workflow: `WHALEBUILD_CFLAGS=-g ./cbuild.sh win64`
-    (after wiping the platform work tree — flags bake at configure
-    time) builds the whole kit — core, TEA extensions, appinit —
-    with DWARF on top of the unchanged -O2, so codegen and timings
-    stay representative of the flaking binary. cbuild.sh forwards
-    WHALEBUILD_* into the container. A wine fault address then
-    resolves offline: `addr2line -f -e whale.exe 0x140691A64` (the
-    exe is never stripped — the linker already keeps the symtab;
-    -g adds file:line). Escalation knob for the free-side of a UAF:
-    `WHALEBUILD_CFLAGS='-g -DTCL_MEM_DEBUG'` — the WHOLE kit must
-    share the define (core-only would mismatch guarded/unguarded
-    blocks across the stubs boundary); it panics at the bogus free,
-    not at the corpse.
+  - Debug-info workflow: DWARF rides by default — WHALEBUILD_CFLAGS
+    defaults to -gdwarf-4 (BuildCmd), reaching the core, every TEA
+    extension and appinit, on top of the unchanged -O2: codegen and
+    timings stay representative of the flaking binary, the debug
+    info just sits there rent-free. Every build emits TWO whales:
+    the canonical one with debug sections stripped (linker symtab
+    kept — function-level symbolication always works) and a -debug
+    twin with full DWARF, identical codegen. A wine fault address
+    resolves offline against the twin:
+    `x86_64-w64-mingw32-addr2line -f -e whale-debug.exe 0x…` →
+    file:line. Flags bake at configure time — wipe the platform
+    work tree when changing them; override via WHALEBUILD_CFLAGS,
+    set it EMPTY to disable. Escalation knob for the free-side of
+    a UAF: `WHALEBUILD_CFLAGS='-g -DTCL_MEM_DEBUG'` — the WHOLE kit
+    must share the define (core-only would mismatch
+    guarded/unguarded blocks across the stubs boundary); it panics
+    at the bogus free, not at the corpse. Deliberately NOT the
+    default: unlike bare debug info, it shifts timings and can hide
+    the very race being hunted.
 
 ## TWAPI (win64-only)
 

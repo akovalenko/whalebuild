@@ -150,6 +150,10 @@ cache and incremental rebuilds survive container death:
 ./cbuild.sh <leg> -- sh              # poke around inside the box
 ```
 
+Every build leaves two whales: the canonical one (debug sections
+stripped, linker symtab kept) and a `whale-debug` twin with full
+DWARF — identical codegen, for `addr2line`/`winedbg` work.
+
 Rootless podman, `--userns=keep-id`: artifacts come out owned by the
 invoking user. Images build lazily on first `cbuild.sh` use. Wine is
 deliberately not in the win64 box — test that leg on the host.
