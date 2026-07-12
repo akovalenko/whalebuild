@@ -8,7 +8,10 @@ upstream assessment — verify before each port.
 ## Already aboard
 
 tk, sqlite3, thread, tls, tcllib + tcllibc, treectrl, twapi
-(3.0.0 → 5.x), Registry/Dde (folded into the static core).
+(3.0.0 → 5.x), Registry/Dde (folded into the static core),
+itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
+(1.3 → 2.1.1, all format handlers incl. the four codec support
+packages).
 
 ## Easy wins — bundled in the Tcl 9 tarball (`source tclpkgs`)
 
@@ -25,12 +28,7 @@ tk, sqlite3, thread, tls, tcllib + tcllibc, treectrl, twapi
 
 ## C extensions with a live upstream — port next
 
-- **tdom** (was 0.8.3) — active upstream, Tcl 9 support in recent
-  releases; TEA. Verify version.
 - **tkdnd** (was 1.0) — alive (petasis/tkdnd); check Tcl 9 branch.
-- **Img/tkimg** (was 1.3 + zlibtcl/jpegtcl/pngtcl/tifftcl) — tkimg
-  2.x targets Tcl 9. Bundles its own codec libs (the *tcl shims);
-  decide static-vs-system per codec like tls/OpenSSL.
 - **udp (tcludp)** (was 1.0.9) — small TEA extension; check Tcl 9.
 - **Ffidl** (was 0.6) — superseded by **cffi** (apnadkarni, same
   author as twapi): active, Tcl 9-ready; port cffi instead. Needs

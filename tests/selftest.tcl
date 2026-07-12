@@ -219,8 +219,27 @@ if {($tcl_platform(platform) eq "windows"
 	pack .t
 	update
 	set r "[winfo class .t] reqwidth=[winfo reqwidth .t]"
-	destroy .
+	destroy .t   ;# NOT `destroy .` — that kills Tk for later checks
 	set r
+    }
+    if {![catch {package require img::jpeg}]} {
+	check tkimg {
+	    # jpeg and tiff live outside the Tk core (unlike png/gif),
+	    # so a roundtrip proves the Img handlers and their support
+	    # packages (jpegtcl; tifftcl pulling zlibtcl) really work.
+	    package require img::tiff
+	    image create photo src -width 16 -height 16
+	    src put #ff0000 -to 0 0 16 16
+	    set jpg [src data -format jpeg]
+	    set tif [src data -format tiff]
+	    image create photo back -data $jpg
+	    set px [back get 8 8]
+	    image delete src back
+	    if {[lindex $px 0] < 200} {error "jpeg roundtrip lost red: $px"}
+	    list jpeg [string length $jpg] tiff [string length $tif] px $px
+	}
+    } else {
+	say "skip tkimg: not compiled in"
     }
 } else {
     say "skip GUI: no DISPLAY or Tk not compiled in"

@@ -98,10 +98,13 @@ namespace eval rcpdsl {
     }
     proc requires  {list}      {dict set ::CUR requires $list}
     proc init      {prefix {safeproc {}}} {
-	dict set ::CUR init $prefix
-	dict set ::CUR safeinit $safeproc
+	# Repeatable: a recipe covering a multi-package source tree
+	# (tkimg) calls this once per static package it registers.
+	dict lappend ::CUR inits [list $prefix $safeproc]
     }
     proc libs      {platform flags} {dict set ::CUR libs $platform $flags}
+    proc archives  {globs}     {dict set ::CUR archives $globs}
+    proc postconf  {platform script} {dict set ::CUR postconf $platform $script}
     proc vfs       {globs}     {dict set ::CUR vfs $globs}
     proc vfsprune  {globs}     {dict set ::CUR vfsprune $globs}
     proc pkgindex  {text}      {dict set ::CUR pkgindex $text}
@@ -128,7 +131,8 @@ proc LoadRecipe {path} {
     set ::CUR [dict create \
 	name [file rootname [file tail $path]] \
 	version {} source {} buildstyle tea maketarget {} confargs {} \
-	requires {} init {} safeinit {} libs {} vfs {} vfsprune {} pkgindex {} \
+	requires {} inits {} archives {} postconf {} libs {} vfs {} \
+	vfsprune {} pkgindex {} \
 	platforms {linux win64} nativetclsh 0 tool {} ldextra {} \
 	ingredients {}]
     set f [open $path]
@@ -398,6 +402,18 @@ proc ExtBuild {name} {
     if {![file exists [file join $bdir Makefile]]} {
 	msg "configure $name"
 	RunIn $bdir $log {*}$conf
+	# `postconf` recipe field: a shell snippet run in the build
+	# tree right after a fresh configure — for source trees whose
+	# own configure chaining is broken for the platform (tkimg's
+	# tifftcl loses --host on its nested libtiff configure).
+	dict for {plat script} [R $name postconf] {
+	    if {$plat in [list * [dict get $P name]]} {
+		msg "postconf $name"
+		RunIn $bdir $log sh -c [string map \
+		    [list @HOST@ [dict get $P host] \
+			 @CACHE@ [file join $Root work cache]] $script]
+	    }
+	}
     }
     msg "make $name"
     set target [R $name maketarget]
@@ -455,14 +471,34 @@ proc CritclBuild {name} {
 }
 
 proc ExtLib {name} {
+    # Static archive(s) of an extension, as a list. Default: the one
+    # non-stub *.a in the source-tree root. A multi-package tree
+    # (tkimg: support libs + base + a dozen format handlers, each its
+    # own sub-build) lists `archives` globs instead — relative to the
+    # source tree, kept in recipe order (dependents before providers,
+    # though stub-mediated trees don't really care).
     global P
     if {[R $name buildstyle] eq "critcl"} {
-	return [file join [dict get $P builds] $name lib$name.a]
+	return [list [file join [dict get $P builds] $name lib$name.a]]
+    }
+    # `archives` globs are trusted verbatim, stub archives included:
+    # a multi-package tree needs its stub CONSUMER libs (they define
+    # <Pkg>_InitStubs + the stub pointer the handlers reference) —
+    # list them after the package archives (single-pass linker).
+    set globs [R $name archives]
+    if {[llength $globs]} {
+	set found {}
+	foreach g $globs {
+	    lappend found {*}[lsort [glob -nocomplain \
+		-directory [SrcDir $name] $g]]
+	}
+	if {![llength $found]} {die "no archives match globs for $name"}
+	return $found
     }
     # TEA packages with a stubs API (itcl, tdbc) ship two archives —
     # skip the stub one: it has no <Pkg>_Init and strands the linker.
     foreach a [lsort [glob -nocomplain -directory [SrcDir $name] *.a]] {
-	if {![string match *stub* [file tail $a]]} {return $a}
+	if {![string match *stub* [file tail $a]]} {return [list $a]}
     }
     die "no static library found for $name"
 }
@@ -502,17 +538,17 @@ proc GenAppinit {exts} {
     set externs {}
     set regs {}
     foreach name $exts {
-	set prefix [R $name init]
-	if {$prefix eq ""} continue
-	lappend externs "extern Tcl_LibraryInitProc ${prefix}_Init;"
-	set safe [R $name safeinit]
-	if {$safe ne ""} {
-	    lappend externs "extern Tcl_LibraryInitProc $safe;"
-	    lappend regs "    Tcl_StaticLibrary(NULL, \"$prefix\",\
-		${prefix}_Init, $safe);"
-	} else {
-	    lappend regs "    Tcl_StaticLibrary(NULL, \"$prefix\",\
-		${prefix}_Init, NULL);"
+	foreach pair [R $name inits] {
+	    lassign $pair prefix safe
+	    lappend externs "extern Tcl_LibraryInitProc ${prefix}_Init;"
+	    if {$safe ne ""} {
+		lappend externs "extern Tcl_LibraryInitProc $safe;"
+		lappend regs "    Tcl_StaticLibrary(NULL, \"$prefix\",\
+		    ${prefix}_Init, $safe);"
+	    } else {
+		lappend regs "    Tcl_StaticLibrary(NULL, \"$prefix\",\
+		    ${prefix}_Init, NULL);"
+	    }
 	}
     }
     set f [open [file join $Root templates [dict get $P appinit]]]
@@ -561,7 +597,7 @@ proc Link {exts out} {
     set ldextra {}
     foreach name $exts {
 	if {[R $name buildstyle] in {tea critcl}} {
-	    lappend objs [ExtLib $name]
+	    lappend objs {*}[ExtLib $name]
 	}
 	lappend ldextra {*}[R $name ldextra]
     }

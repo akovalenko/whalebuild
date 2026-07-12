@@ -1,0 +1,99 @@
+# tkimg (Img) 2.1.1 (tkimg.sourceforge.net) — photo image format
+# handlers for Tk, Tcl 9-ready in the 2.x line. One source tree, ~24
+# TEA sub-builds driven by the master configure: four support packages
+# wrapping bundled codec libraries whole (zlibtcl 1.3.2, pngtcl 1.6.55,
+# jpegtcl 10.0.0, tifftcl 4.7.1 — self-contained, nothing new to link
+# against), the tkimg base utilities, and a format handler per image
+# type. Everything is stubs-glued: a handler's *_InitStubs does
+# Tcl_PkgRequireEx on its support packages, so the pkgindex entries
+# below are the whole dependency wiring. This recipe is the reason
+# `init` is repeatable and `archives` exists.
+#
+# The Img meta-package mirrors upstream's union pkgIndex: the reversed
+# order matters (`-format`-less reads probe formats last-to-first, so
+# magic-less formats sit early); dted/flir/gif/ps/raw load only by
+# explicit request, as upstream intends (gif: Tk's builtin is better).
+version 2.1.1
+source tarball https://downloads.sourceforge.net/project/tkimg/tkimg/2.1/tkimg%202.1.1/Img-2.1.1.tar.gz
+requires tk
+init Zlibtcl Zlibtcl_SafeInit
+init Pngtcl Pngtcl_SafeInit
+init Jpegtcl Jpegtcl_SafeInit
+init Tifftcl Tifftcl_SafeInit
+init Tkimg Tkimg_SafeInit
+init Tkimgbmp Tkimgbmp_SafeInit
+init Tkimgdted Tkimgdted_SafeInit
+init Tkimgflir Tkimgflir_SafeInit
+init Tkimggif Tkimggif_SafeInit
+init Tkimgico Tkimgico_SafeInit
+init Tkimgjpeg Tkimgjpeg_SafeInit
+init Tkimgpcx Tkimgpcx_SafeInit
+init Tkimgpixmap Tkimgpixmap_SafeInit
+init Tkimgpng Tkimgpng_SafeInit
+init Tkimgppm Tkimgppm_SafeInit
+init Tkimgps Tkimgps_SafeInit
+init Tkimgraw Tkimgraw_SafeInit
+init Tkimgsgi Tkimgsgi_SafeInit
+init Tkimgsun Tkimgsun_SafeInit
+init Tkimgtga Tkimgtga_SafeInit
+init Tkimgtiff Tkimgtiff_SafeInit
+init Tkimgwindow Tkimgwindow_SafeInit
+init Tkimgxbm Tkimgxbm_SafeInit
+init Tkimgxpm Tkimgxpm_SafeInit
+# First glob catches all 24 package sub-builds (TEA 9 names them
+# libtcl9<pkg><ver>.a). The stub consumer libs come after: handlers
+# reference Tkimg_InitStubs/tkimgStubsPtr, pngtcl's libpng calls zlib
+# through zlibtcl's stubs — those symbols live in lib<pkg>stub.a, and
+# the single-pass linker wants them right of their referents.
+archives {*/libtcl9*.a */lib*stub.a}
+# Cross-build repair: tifftcl's configure chains the REAL libtiff
+# configure to generate tif_config.h/tiffconf.h/tiffvers.h — but hands
+# it the host triple as a bare positional word, not --host, so under
+# cross it dies with "cannot run C compiled programs" (and tifftcl's
+# configure ignores the failure, leaving make to hit missing headers).
+# Re-run it properly in a scratch dir (in tifftcl's dir it would
+# clobber the TEA Makefile/config.status — upstream gets away with the
+# shared dir only because it chains BEFORE its own AC_OUTPUT) and drop
+# the three headers where -I./libtiff expects them; flags mirror
+# upstream's chained call. BAWT never sees any of this: its Windows
+# builds are native under MSYS, not cross.
+postconf win64 {mkdir -p tiffhdrs && cd tiffhdrs && \
+    ../compat/libtiff/configure --host=@HOST@ \
+	--disable-zlib --disable-zstd --disable-lzma --disable-pixarlog \
+	--disable-jpeg --disable-jbig --disable-webp --disable-lerc && \
+    mkdir -p ../libtiff/libtiff && \
+    cp libtiff/tif_config.h libtiff/tiffconf.h libtiff/tiffvers.h \
+	../libtiff/libtiff/ && \
+    printf '#include <windows.h>\n' > ../tiff/Windows.h}
+# ^ the last line: tiff/tiff.c does `#include <Windows.h>` — fine on
+# MSYS's case-insensitive NTFS, a miss against mingw's lowercase
+# windows.h on a case-sensitive fs; the shim keeps the source pristine.
+pkgindex {
+    package ifneeded zlibtcl 1.3.2 {load {} Zlibtcl}
+    package ifneeded pngtcl 1.6.55 {load {} Pngtcl}
+    package ifneeded jpegtcl 10.0.0 {load {} Jpegtcl}
+    package ifneeded tifftcl 4.7.1 {load {} Tifftcl}
+    package ifneeded img::base 2.1.1 {load {} Tkimg}
+    foreach fmt {bmp dted flir gif ico jpeg pcx pixmap png ppm
+	    ps raw sgi sun tga tiff window xbm xpm} {
+	package ifneeded img::$fmt 2.1.1 [list load {} Tkimg$fmt]
+    }
+    unset fmt
+    package ifneeded Img 2.1.1 {
+	package require img::window
+	package require img::tga
+	package require img::ico
+	package require img::pcx
+	package require img::sgi
+	package require img::sun
+	package require img::xbm
+	package require img::xpm
+	package require img::jpeg
+	package require img::png
+	package require img::tiff
+	package require img::bmp
+	package require img::ppm
+	package require img::pixmap
+	package provide Img 2.1.1
+    }
+}
