@@ -16,7 +16,8 @@
 # carries p7zip-plugins (the `7z` the driver calls for BAWT-mirrored
 # sources); CRB is enabled for the stray -devel packages EL9 keeps
 # off AppStream. Xvfb + xauth + a real font let `cbuild.sh linux
-# selftest` run the GUI checks headless inside the box.
+# selftest` run the GUI checks headless inside the box. Xcursor
+# headers are for tkdnd (it refuses to configure without them).
 
 FROM docker.io/library/almalinux:9
 
@@ -33,7 +34,7 @@ RUN dnf -y install epel-release \
         tcl gcc make git tar gzip zip unzip rsync findutils diffutils \
         p7zip p7zip-plugins \
         openssl-devel libuuid-devel zlib-devel \
-        libX11-devel libXext-devel libXft-devel \
+        libX11-devel libXext-devel libXft-devel libXcursor-devel \
         xorg-x11-server-Xvfb xorg-x11-xauth dejavu-sans-fonts \
     && dnf clean all
 

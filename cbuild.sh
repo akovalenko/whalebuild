@@ -23,6 +23,18 @@
 # get a writable one. The repo mounts at /w; the work-<leg> mount
 # shadows /w/work, so recipes and driver see the usual layout.
 #
+# Extra podman options ride in through two env knobs (word-split, so
+# flags only — no spaces inside a value):
+#   CBUILD_OPTS        extra args for every `podman run`
+#                      e.g. CBUILD_OPTS='--network=host -e FOO=bar'
+#   CBUILD_BUILD_OPTS  extra args for the lazy `podman build`
+#                      e.g. CBUILD_BUILD_OPTS='--network=host'
+# (They are separate because run flags like -e are not build flags.)
+# podman forwards HTTP_PROXY/HTTPS_PROXY/NO_PROXY from the client
+# environment into both by itself; a proxy listening on the host's
+# 127.0.0.1 additionally needs --network=host to be reachable (or
+# slirp4netns:allow_host_loopback=true and the 10.0.2.2 address).
+#
 # Images build lazily on first use. After editing a Containerfile,
 # rebuild explicitly:
 #   podman build -f Containerfile.<leg> -t whalebuild-<leg> .
@@ -39,13 +51,17 @@ esac
 img=localhost/whalebuild-$leg
 
 podman image exists "$img" \
-    || podman build -f "$HERE/Containerfile.$leg" -t "$img" "$HERE"
+    || podman build ${CBUILD_BUILD_OPTS:-} \
+        -f "$HERE/Containerfile.$leg" -t "$img" "$HERE"
 mkdir -p "$HERE/work-$leg"
 
 tty=
 [ -t 0 ] && tty=-it
 crun() {
+    # ${CBUILD_OPTS} after the defaults, so e.g. -e HOME=... in it
+    # overrides ours (later podman flags win).
     podman run --rm $tty --userns=keep-id -e HOME=/tmp \
+        ${CBUILD_OPTS:-} \
         -v "$HERE:/w" -v "$HERE/work-$leg:/w/work" -w /w \
         "$img" "$@"
 }

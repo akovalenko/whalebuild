@@ -151,6 +151,12 @@ Rootless podman, `--userns=keep-id`: artifacts come out owned by the
 invoking user. Images build lazily on first `cbuild.sh` use. Wine is
 deliberately not in the win64 box — test that leg on the host.
 
+Extra podman flags ride in via env: `CBUILD_OPTS` for every `podman
+run` (e.g. `--network=host -e X=y`), `CBUILD_BUILD_OPTS` for the lazy
+image build. A proxy on the host's loopback needs `--network=host`
+in both; podman forwards the `HTTP_PROXY`/`HTTPS_PROXY` variables
+themselves automatically.
+
 ## Status
 
 Working proof of concept grown out of a live experiment (2026-07); the
