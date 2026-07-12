@@ -118,9 +118,9 @@ The extension list is configurable per build (`-pkgs`); named *flavors*
 Linux host with: gcc, make, curl, git, unzip, a `tclsh` (any 8.6+, only
 to run the driver), Tcl/Tk build deps (zlib, X11/Xft headers for Tk),
 `x86_64-w64-mingw32-gcc` for win64, OpenSSL headers for the tls recipe
-(win64 additionally wants the static OpenSSL ingredient cross-built
-once into `work/cache/openssl-win64` — instructions in tls.rcp),
-rsync for `-update`.
+(on win64 the static OpenSSL ingredient is cross-built automatically
+into `work/cache/openssl-win64` on the first build — declared in
+tls.rcp), rsync for `-update`.
 Testing win64 output needs wine; GUI self-test uses Xvfb if present.
 
 ## Status

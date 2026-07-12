@@ -19,8 +19,9 @@ recipes and the driver encode these so users don't have to.
   `.so.3` ABI), so admins apply security updates without touching the
   whale. On Windows there is no system OpenSSL, and DLLs next to the
   exe would break the single-file model — so win64 links OpenSSL
-  STATICALLY from the `work/cache/openssl-win64` ingredient (build
-  instructions in tls.rcp; OpenSSL >= 3.2 so tcltls's Windows default
+  STATICALLY from the `work/cache/openssl-win64` ingredient, declared
+  in tls.rcp (`ingredient` recipe field) and cross-built automatically
+  on the first win64 build (OpenSSL >= 3.2 so tcltls's Windows default
   CA store `org.openssl.winstore://` — the native ROOT store — kicks
   in). Security updates on win64 mean rebuilding the kit; that is the
   platform's normal cost. twapi's SChannel TLS remains available in

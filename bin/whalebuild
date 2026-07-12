@@ -98,6 +98,19 @@ namespace eval rcpdsl {
     proc native-tclsh {}       {dict set ::CUR nativetclsh 1}
     proc tool      {kind url}  {dict set ::CUR tool [list $kind $url]}
     proc ldextra   {flags}     {dict set ::CUR ldextra $flags}
+    proc ingredient {name platform spec} {
+	# A support library the extension builds against (referenced as
+	# @CACHE@/<name>), cross-built ONCE into work/cache/<name> when
+	# missing. Pinned by its source URL like tarball recipes — bump
+	# the URL and delete work/cache/<name>* to move versions.
+	dict set ::CUR ingredients $name [list $platform $spec]
+    }
+}
+
+# An ingredient spec evaluates in this namespace, filling ::CURING.
+namespace eval ingdsl {
+    proc source {kind args} {dict set ::CURING source [linsert $args 0 $kind]}
+    proc build  {script}    {dict set ::CURING build $script}
 }
 
 proc LoadRecipe {path} {
@@ -105,7 +118,8 @@ proc LoadRecipe {path} {
 	name [file rootname [file tail $path]] \
 	version {} source {} buildstyle tea maketarget {} confargs {} \
 	requires {} init {} safeinit {} libs {} vfs {} vfsprune {} pkgindex {} \
-	platforms {linux win64} nativetclsh 0 tool {} ldextra {}]
+	platforms {linux win64} nativetclsh 0 tool {} ldextra {} \
+	ingredients {}]
     set f [open $path]
     set body [read $f]
     close $f
@@ -263,6 +277,54 @@ proc FetchTool {name} {
     return $dst
 }
 
+proc BuildIngredients {name} {
+    # Build the recipe's missing ingredients: support libraries the
+    # extension compiles against (@CACHE@/<ing>), cross-built once into
+    # work/cache/<ing>. Source lands in work/cache/<ing>.src; the build
+    # script runs in it under `sh -e` with @OUT@ -> the install prefix
+    # and @JOBS@ -> the -jobs value. The prefix is written as
+    # <ing>.tmp and renamed on success, so a failed build never leaves
+    # a half-populated ingredient that would pass the exists check.
+    global P Root
+    dict for {ing pspec} [R $name ingredients] {
+	lassign $pspec plat spec
+	if {$plat ni [list * [dict get $P name]]} continue
+	set dst [file join $Root work cache $ing]
+	if {[file exists $dst]} continue
+	set ::CURING [dict create source {} build {}]
+	namespace eval ingdsl $spec
+	set src    [dict get $::CURING source]
+	set script [dict get $::CURING build]
+	if {$src eq {} || $script eq {}} {
+	    die "$name: ingredient $ing needs both `source` and `build`"
+	}
+	set sdir [file join $Root work cache $ing.src]
+	set log  [file join $Root work cache logs ing-$ing.log]
+	if {![file exists $sdir]} {
+	    switch -- [lindex $src 0] {
+		tarball {
+		    msg "fetch ingredient $ing ([lindex $src 1])"
+		    FetchTarball [lindex $src 1] $sdir $log
+		}
+		git {
+		    msg "fetch ingredient $ing (git clone)"
+		    file mkdir [file dirname $sdir]
+		    Run $log git clone --depth 1 --recurse-submodules \
+			--shallow-submodules [lindex $src 1] $sdir
+		}
+		default {die "$name: ingredient $ing: unknown source\
+		    kind '[lindex $src 0]'"}
+	    }
+	}
+	set tmp $dst.tmp
+	file delete -force $tmp
+	msg "build ingredient $ing (once, into work/cache/$ing)"
+	RunIn $sdir $log sh -e -c [string map \
+	    [list @OUT@ $tmp @JOBS@ [dict get $P jobs]] $script]
+	file rename $tmp $dst
+    }
+}
+
 # --------------------------------------------------------------- build --
 
 proc CoreBuild {name} {
@@ -301,16 +363,18 @@ proc ExtBuild {name} {
 	lappend conf --host=[dict get $P host]
     }
     # @CACHE@ -> work/cache (shared ingredients, e.g. a cross-built
-    # support library like static OpenSSL for win64). An ingredient is
-    # built once by hand — fail early and name it when it is missing,
-    # instead of letting configure die on a cryptic header check.
+    # support library like static OpenSSL for win64). Declared
+    # ingredients were built by BuildIngredients before this point, so
+    # a missing one here means an undeclared reference — fail with the
+    # name instead of letting configure die on a cryptic header check.
     dict for {plat flags} [R $name confargs] {
 	if {$plat in [list * [dict get $P name]]} {
 	    foreach f $flags {
 		if {[regexp {@CACHE@/([^/ =]+)} $f -> ing]
 			&& ![file exists [file join $Root work cache $ing]]} {
 		    die "$name needs the work/cache/$ing ingredient —\
-			build it once first (instructions: recipes/$name.rcp)"
+			declare it with `ingredient` in recipes/$name.rcp\
+			or build it by hand"
 		}
 	    }
 	    lappend conf {*}[string map \
@@ -858,6 +922,7 @@ proc BuildCmd {argv} {
 	CoreBuild tk
     }
     foreach name $use {
+	BuildIngredients $name
 	switch -- [R $name buildstyle] {
 	    tea    {Fetch $name; ExtBuild $name}
 	    critcl {Fetch $name; CritclBuild $name}
