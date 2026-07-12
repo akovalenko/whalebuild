@@ -141,11 +141,21 @@ recipes and the driver encode these so users don't have to.
   `-municode -mconsole -static-libgcc` like the stock tclsh.exe.
 - Static lib names differ per platform (`libtcl9.0.a` vs `libtcl90.a`);
   the driver globs instead of hardcoding.
-- Known wine flake (seen twice, 2026-07-12): the FIRST run of a
-  freshly built whale.exe in a warm prefix can page-fault on a NULL
-  read inside TclpAlloc during the twapi selftest check; every rerun
-  and every reduced probe passes. Recorded so it isn't rediscovered;
-  kill the stuck run, `wineserver -k`, rerun.
+- Known wine flake (2026-07-12): the FULL selftest intermittently
+  page-faults on a NULL read inside TclpAlloc during the twapi check
+  (~50%, non-deterministic — the SAME warm exe passes one run and
+  faults the next; reproduced independently on the Arch/UCRT and the
+  Ubuntu/msvcrt builds, so it is toolchain-independent). NOT a
+  first-cold-run effect (an early guess a warm-exe fault disproved).
+  TclpAlloc is Tcl's threaded allocator reading a per-thread cache
+  slot; the fault is a race exposed only under the full check load
+  (which spins up worker threads: thread, the tls loopback's server
+  thread, twapi's own). Reduced probes that reproduce the whole
+  package/thread/crypto sequence up to twapi never fault, so it needs
+  the real concurrent load. Almost certainly a wine + Tcl-core
+  interaction, not a recipe bug — the real-Windows test is still
+  outstanding. Practically: rerun; kill the stuck run, `wineserver
+  -k`, rerun.
 
 ## TWAPI (win64-only)
 
