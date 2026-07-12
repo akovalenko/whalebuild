@@ -31,18 +31,32 @@ static on both platforms, tclh submodule pinned as an ingredient).
   whale creates svg photos and runs awthemes' scalable awbreeze with
   no extension at all.
 
-## C extensions with a live upstream — port next
+## Parked — no Tcl 9 upstream to port (checked 2026-07-12)
 
-- **Expect** (was 5.44, unix, gui image only) — upstream near-dead,
-  Tcl 9 status doubtful; decide if the niche (pty scripting) is
-  still needed.
-- **TclX** (was 8.4) — kept alive by FlightAware for 8.6; Tcl 9
-  unclear. Much of it (signals, fork) still has no core equivalent.
-- **ceptcl** (was 0.4, unix) — AF_UNIX sockets; niche still open in
-  the Tcl 9 core, upstream ancient. Candidate for a small modern
-  replacement.
-- **tktray** (was 1.3.8, X11) — system tray; on Windows the old
-  Winico role is covered by twapi. Check freedesktop-era relevance.
+The recipe policy is stock sources, zero patches; none of these has
+an upstream that builds against Tcl 9 today, so porting them means
+maintaining a fork — parked instead, each with its revisit trigger.
+
+- **Expect** (was 5.44, unix, gui image only) — no Tcl 9 release
+  exists; the code leans on Tcl internals well beyond the public API,
+  so it won't cross-compile clean. Revisit if core.tcl-lang.org ships
+  an expect for Tcl 9. The pty niche has no whale substitute till
+  then.
+- **TclX** (was 8.4) — FlightAware's fork is the live one but its
+  Tcl 9 port is unfinished business: tracking issue "Update TclX for
+  Tcl 9 API compatibility" open, last commit 2024-01 (8.6.3).
+  Revisit when that issue closes. Meanwhile the daily-bread bits
+  (signals, fork/exec) remain core-less; cffi covers one-off syscall
+  needs at script level.
+- **ceptcl** (was 0.4, unix) — upstream dead for ~20 years; AF_UNIX
+  is still absent from the Tcl 9 core, so the niche is real, but the
+  honest path is a small fresh extension (or script-level cffi for
+  datagram/ioctl cases — stream channels need C for the channel
+  driver). Not a porting job; parked as a build-from-scratch idea.
+- **tktray** (was 1.3.8, X11) — implements the XEmbed tray protocol,
+  which the freedesktop world left for DBus StatusNotifierItem;
+  GNOME dropped XEmbed trays years ago. A port would target a museum
+  piece; on Windows twapi already covers the systray. Dropped.
 
 ## Superseded — do not port, note the replacement
 
