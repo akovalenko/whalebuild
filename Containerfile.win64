@@ -23,9 +23,12 @@
 
 FROM docker.io/library/archlinux:latest
 
+# `zip`: the Tk makefile packs libtk9.0.4.zip with the system zip
+# when configure finds one; its no-zip fallback (minizip from the
+# TCL build tree) is broken in an installed-tree build.
 RUN pacman -Syu --noconfirm \
     && pacman -S --noconfirm --needed \
-        mingw-w64-gcc gcc make git curl unzip rsync p7zip perl \
+        mingw-w64-gcc gcc make git curl zip unzip rsync p7zip perl \
     && rm -rf /var/cache/pacman/pkg/*
 
 RUN curl -fL -o /tmp/tcl.tar.gz \
