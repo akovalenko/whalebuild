@@ -1,5 +1,9 @@
 # SQLite Tcl extension, bundled in the Tcl source tarball (pkgs/).
 # Single-file amalgamation — the easiest static case there is.
+# The bundle's own configure defaults already compile the full
+# option set (FTS3/4/5, R*Tree + geopoly, math functions, session,
+# stat4, ...) — nothing to enable here; the selftest pins FTS5,
+# rtree and math so a future rebundle can't silently drop them.
 version 3.53.0
 source tclpkgs sqlite3.53.0
 init Sqlite3

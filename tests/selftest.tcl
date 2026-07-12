@@ -35,6 +35,22 @@ check sqlite3 {
     join $r ,
 }
 
+check sqlite3-batteries {
+    # the bundled TEA package compiles the full option set by default
+    # (FTS3/4/5, R*Tree + geopoly, math funcs, session, stat4...) —
+    # pin the headline ones so a future rebundle can't silently drop
+    # them
+    sqlite3 db :memory:
+    db eval {CREATE VIRTUAL TABLE ft USING fts5(body)}
+    db eval {INSERT INTO ft VALUES ('the whale swims'), ('the kit builds')}
+    set hit [db onecolumn {SELECT body FROM ft WHERE ft MATCH 'whale'}]
+    db eval {CREATE VIRTUAL TABLE rt USING rtree(id, x0, x1)}
+    set ok [db onecolumn {SELECT sqrt(2) BETWEEN 1.41 AND 1.42}]
+    db close
+    if {$hit ne "the whale swims" || !$ok} {error "fts5=$hit math=$ok"}
+    list fts5 match rtree table math sqrt
+}
+
 check thread {
     package require thread
     set tid [thread::create]
