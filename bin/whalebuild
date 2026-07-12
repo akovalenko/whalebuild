@@ -182,14 +182,29 @@ proc SortByRequires {pkgs} {
 
 # --------------------------------------------------------------- fetch --
 
-proc FetchTarball {url dst log} {
+proc FetchTarball {url dst log {kind tarball}} {
+    # tarball (.tar.gz) or 7z — the latter for sources whose only
+    # accessible pinned archive is BAWT's own mirror (bawt.tcl3d.org
+    # hosts <lib>-<ver>.7z; e.g. tcludp's fossil hides tarballs behind
+    # a login). Either way the archive's single top dir becomes $dst.
     file mkdir [file dirname $dst]
-    set tgz $dst.tar.gz
-    Run $log curl -sSL -o $tgz $url
     set x $dst.extract
     file delete -force $x
     file mkdir $x
-    Run $log tar xzf $tgz -C $x
+    if {$kind eq "7z"} {
+	set ar $dst.7z
+	Run $log curl -sSL -o $ar $url
+	Run $log 7z x -o$x $ar
+	# 7z archives carry no unix permission bits — restore the
+	# executables autoconf trees rely on, or ./configure dies
+	# with a bare "permission denied".
+	Run $log sh -c "find [list $x] -type f \\( -name configure\
+	    -o -name install-sh -o -name '*.sh' \\) -exec chmod +x {} +"
+    } else {
+	set ar $dst.tar.gz
+	Run $log curl -sSL -o $ar $url
+	Run $log tar xzf $ar -C $x
+    }
     set tops [glob -directory $x *]
     if {[llength $tops] == 1 && [file isdirectory [lindex $tops 0]]} {
 	file rename [lindex $tops 0] $dst
@@ -218,9 +233,9 @@ proc FetchCache {name} {
 	return $dst
     }
     switch -- [lindex $src 0] {
-	tarball {
+	tarball - 7z {
 	    msg "fetch $name ([lindex $src 1])"
-	    FetchTarball [lindex $src 1] $dst $log
+	    FetchTarball [lindex $src 1] $dst $log [lindex $src 0]
 	}
 	git {
 	    msg "fetch $name (git clone)"
