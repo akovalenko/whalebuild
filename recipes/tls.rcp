@@ -1,15 +1,36 @@
-# TclTLS 2.0.1 (core.tcl-lang.org). The tls C code is static; OpenSSL is
-# linked DYNAMICALLY from the system on purpose: libssl.so.3 ABI is
-# stable and admins apply security updates without rebuilding the whale.
-# Linux-only for now: Windows has no system OpenSSL (options: ship the
-# two DLLs next to the exe / SChannel via TWAPI / static).
+# TclTLS 2.0.1 (core.tcl-lang.org). The tls C code is static; OpenSSL
+# linkage differs by platform ON PURPOSE:
+#  - linux: DYNAMIC from the system — libssl.so.3 ABI is stable and
+#    admins apply security updates without rebuilding the whale;
+#  - win64: STATIC from the work/cache/openssl-win64 ingredient —
+#    Windows has no system OpenSSL, and a whale is single-file by
+#    design (no DLLs next to the exe). Security updates there mean
+#    rebuilding the kit; that is the platform's normal cost.
+# The win64 ingredient is built once into the cache:
+#    cd work/cache
+#    curl -sSLO https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz
+#    tar xzf openssl-3.5.7.tar.gz && mv openssl-3.5.7 openssl && cd openssl
+#    ./Configure mingw64 no-shared no-apps no-docs no-tests \
+#        --prefix="$PWD/../openssl-win64" --libdir=lib \
+#        --cross-compile-prefix=x86_64-w64-mingw32-
+#    make -j$(nproc) && make install_sw
+# OpenSSL >= 3.2 is required on win64: tcltls then defaults the CA
+# store to org.openssl.winstore:// (the native ROOT store), so
+# verification works out of the box with no -cafile/-castore wiring.
 # `make` breaks in the doc generator (dtplite wants tcllib) — build the
 # binaries target only. tls.tcl must ship next to the static pkgindex.
 version 2.0.1
 source tarball https://core.tcl-lang.org/tcltls/tarball/tls-2.0.1/tcltls.tar.gz
-platforms {linux}
+platforms {linux win64}
 maketarget binaries
+# --disable-hardening: -fstack-protector would need libssp on mingw,
+# and -lssp drags in libssp-0.dll — breaking the single-file whale
+# (none of the other batteries are hardened either).
+confargs win64 {--with-openssl-dir=@CACHE@/openssl-win64 --enable-static-ssl
+    --disable-hardening}
 libs linux {-lssl -lcrypto}
+libs win64 {-L@CACHE@/openssl-win64/lib -lssl -lcrypto
+    -lws2_32 -lgdi32 -lcrypt32 -lbcrypt}
 vfs {library/tls.tcl}
 pkgindex {
     package ifneeded tls 2.0.1 [list ::apply {{dir} {

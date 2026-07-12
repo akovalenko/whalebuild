@@ -14,12 +14,17 @@ recipes and the driver encode these so users don't have to.
   `package require Tk` (through the image's `lib/tk/pkgIndex.tcl`, which
   sets `::tk_library` first). No X11 connection until asked. This is the
   classic tclkit model.
-- **System layer stays dynamic.** libc, X11 — and OpenSSL: tls C code is
-  static, libssl/libcrypto come from the OS (stable `.so.3` ABI), so
-  admins apply security updates without touching the whale. On Windows
-  there is no system OpenSSL; options are shipping the two DLLs next to
-  the exe (updatable in place), SChannel via TWAPI, or static (worst for
-  updates) — not decided here, the tls recipe is Linux-only for now.
+- **System layer stays dynamic — on Linux.** libc, X11 — and OpenSSL:
+  tls C code is static, libssl/libcrypto come from the OS (stable
+  `.so.3` ABI), so admins apply security updates without touching the
+  whale. On Windows there is no system OpenSSL, and DLLs next to the
+  exe would break the single-file model — so win64 links OpenSSL
+  STATICALLY from the `work/cache/openssl-win64` ingredient (build
+  instructions in tls.rcp; OpenSSL >= 3.2 so tcltls's Windows default
+  CA store `org.openssl.winstore://` — the native ROOT store — kicks
+  in). Security updates on win64 mean rebuilding the kit; that is the
+  platform's normal cost. twapi's SChannel TLS remains available in
+  parallel.
 - **Per-platform source trees, in-tree builds.** Sources are fetched once
   into `work/cache/` (pristine, never built) and copied per platform;
   everything builds in-tree. Out-of-tree (VPATH) builds of third-party

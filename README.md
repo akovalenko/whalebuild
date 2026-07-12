@@ -117,16 +117,20 @@ The extension list is configurable per build (`-pkgs`); named *flavors*
 
 Linux host with: gcc, make, curl, git, unzip, a `tclsh` (any 8.6+, only
 to run the driver), Tcl/Tk build deps (zlib, X11/Xft headers for Tk),
-`x86_64-w64-mingw32-gcc` for win64, OpenSSL headers for the tls recipe,
+`x86_64-w64-mingw32-gcc` for win64, OpenSSL headers for the tls recipe
+(win64 additionally wants the static OpenSSL ingredient cross-built
+once into `work/cache/openssl-win64` — instructions in tls.rcp),
 rsync for `-update`.
 Testing win64 output needs wine; GUI self-test uses Xvfb if present.
 
 ## Status
 
 Working proof of concept grown out of a live experiment (2026-07); the
-default battery set (tk, treectrl, sqlite3, thread, tcllib, plus tls and
+default battery set (tk, treectrl, sqlite3, thread, tcllib, tls, plus
 tcllibc on Linux, twapi on Windows) builds and self-tests on both
-platforms. Interfaces (recipe fields, CLI) may change.
+platforms (tls on win64 = static OpenSSL, verified under wine incl.
+winstore certificate verification). Interfaces (recipe fields, CLI)
+may change.
 
 ## License
 

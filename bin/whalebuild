@@ -80,7 +80,11 @@ namespace eval rcpdsl {
     proc source    {kind args} {dict set ::CUR source [linsert $args 0 $kind]}
     proc buildstyle {s}        {dict set ::CUR buildstyle $s}
     proc maketarget {t}        {dict set ::CUR maketarget $t}
-    proc confargs  {list}      {dict set ::CUR confargs $list}
+    proc confargs  {args}      {
+	# confargs {list} — every platform; confargs <platform> {list}
+	if {[llength $args] == 1} {set args [linsert $args 0 *]}
+	dict set ::CUR confargs {*}$args
+    }
     proc requires  {list}      {dict set ::CUR requires $list}
     proc init      {prefix {safeproc {}}} {
 	dict set ::CUR init $prefix
@@ -296,7 +300,14 @@ proc ExtBuild {name} {
     if {[dict get $P host] ne ""} {
 	lappend conf --host=[dict get $P host]
     }
-    lappend conf {*}[R $name confargs]
+    # @CACHE@ -> work/cache (shared ingredients, e.g. a cross-built
+    # support library like static OpenSSL for win64).
+    dict for {plat flags} [R $name confargs] {
+	if {$plat in [list * [dict get $P name]]} {
+	    lappend conf {*}[string map \
+		[list @CACHE@ [file join $Root work cache]] $flags]
+	}
+    }
     if {[R $name nativetclsh]} {
 	set ::env(TCLSH_NATIVE) [NativeTclsh]
     }
@@ -431,7 +442,7 @@ proc GenAppinit {exts} {
 }
 
 proc Link {exts out} {
-    global P
+    global P Root
     set inst [dict get $P inst]
     set lib  [file join $inst lib]
     set cc   [dict get $P cc]
@@ -484,9 +495,11 @@ proc Link {exts out} {
 	dict for {plat flags} [R $name libs] {
 	    if {$plat ne [dict get $P name]} continue
 	    # @SRC@ -> the recipe's source tree (e.g. an in-tree
-	    # prebuilt library shipped with the extension).
+	    # prebuilt library shipped with the extension);
+	    # @CACHE@ -> work/cache (shared cross-built ingredients).
 	    lappend syslibs {*}[string map \
-		[list @SRC@ [SrcDir $name]] $flags]
+		[list @SRC@ [SrcDir $name] \
+		     @CACHE@ [file join $Root work cache]] $flags]
 	}
     }
     msg "link [file tail $out]"
