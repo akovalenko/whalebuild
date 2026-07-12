@@ -1,0 +1,5 @@
+# Build context hygiene: the Containerfiles COPY nothing (the repo
+# bind-mounts at run time), so keep the context tiny — the work
+# trees alone would be gigabytes.
+work*
+.git

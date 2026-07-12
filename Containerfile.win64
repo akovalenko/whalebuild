@@ -1,0 +1,43 @@
+# Containerfile.win64 — cross box for the windows whale on fresh
+# Arch: rolling mingw-w64, which is the point — a modern cross
+# gcc/binutils for the win64 leg. The produced exe carries no glibc
+# dependence, so nothing here needs to be old. perl interprets
+# OpenSSL's Configure (the openssl-win64 ingredient cross-built on
+# the first tls build); gcc (the native one) builds the baked tclsh
+# below and nothing else.
+#
+# A native zipfs-capable Tcl 9 tclsh is baked at /opt/tcl9 and handed
+# to the driver via WHALEBUILD_NATIVE_TCLSH: each leg owns a separate
+# work tree, so the cross build cannot borrow work/linux's install
+# the way a shared-tree build does — and it needs a native tclsh for
+# thread's cross-configure, tkhtml's codegen and `zipfs mkimg`.
+# Pinned to the same tarball recipes/tcl.rcp builds; bump them
+# together. The /usr/local/bin/tclsh symlink also serves the driver
+# itself (bin/whalebuild restarts under `tclsh`).
+#
+#   podman build -f Containerfile.win64 -t whalebuild-win64 .
+#   ./cbuild.sh win64 -jobs 8         # see cbuild.sh for the runs
+#
+# No wine here: the win64 selftest ritual (prefix reuse, one run per
+# wineserver life) stays on the host.
+
+FROM docker.io/library/archlinux:latest
+
+RUN pacman -Syu --noconfirm \
+    && pacman -S --noconfirm --needed \
+        mingw-w64-gcc gcc make git curl unzip rsync p7zip perl \
+    && rm -rf /var/cache/pacman/pkg/*
+
+RUN curl -fL -o /tmp/tcl.tar.gz \
+        https://prdownloads.sourceforge.net/tcl/tcl9.0.4-src.tar.gz \
+    && mkdir /tmp/tcl \
+    && tar xzf /tmp/tcl.tar.gz -C /tmp/tcl --strip-components=1 \
+    && cd /tmp/tcl/unix \
+    && ./configure --disable-shared --prefix=/opt/tcl9 \
+    && make -j"$(nproc)" && make install \
+    && ln -s /opt/tcl9/bin/tclsh9.0 /usr/local/bin/tclsh \
+    && rm -rf /tmp/tcl /tmp/tcl.tar.gz
+
+ENV WHALEBUILD_NATIVE_TCLSH=/opt/tcl9/bin/tclsh9.0
+
+WORKDIR /w

@@ -1,0 +1,32 @@
+# Containerfile.linux — build box for the linux whale on AlmaLinux 9:
+# the OLDEST mainstream glibc (2.34) that coexists with OpenSSL 3.
+# The whale links libssl DYNAMICALLY by policy (NOTES.md), so its
+# runtime floor is "any distro with libssl.so.3" — and building
+# against EL9's glibc makes the binary run on every one of them:
+# EL9+, Ubuntu 22.04+ (2.35), Debian 12+ (2.36), Fedora 36+. Distros
+# older than that lack the soname anyway, so nothing is lost by not
+# going older. Toolchain freshness does not matter here (distro
+# gcc 11 is plenty); glibc age does.
+#
+#   podman build -f Containerfile.linux -t whalebuild-linux .
+#   ./cbuild.sh linux -jobs 8         # see cbuild.sh for the runs
+#
+# tcl = the 8.6 host tclsh that runs the driver (the native Tcl 9
+# one is built by the build itself into work/linux/install). EPEL
+# carries p7zip-plugins (the `7z` the driver calls for BAWT-mirrored
+# sources); CRB is enabled for the stray -devel packages EL9 keeps
+# off AppStream. Xvfb + xauth + a real font let `cbuild.sh linux
+# selftest` run the GUI checks headless inside the box.
+
+FROM docker.io/library/almalinux:9
+
+RUN dnf -y install epel-release \
+    && dnf -y --enablerepo=crb install \
+        tcl gcc make git curl tar unzip rsync findutils diffutils \
+        p7zip p7zip-plugins \
+        openssl-devel libuuid-devel zlib-devel \
+        libX11-devel libXext-devel libXft-devel \
+        xorg-x11-server-Xvfb xorg-x11-xauth dejavu-sans-fonts \
+    && dnf clean all
+
+WORKDIR /w
