@@ -32,6 +32,15 @@ recipes and the driver encode these so users don't have to.
   driver therefore runs extension sub-makes first, then a fresh link
   step. Build trees under `work/` keep their objects: one-line C change →
   one recompile + relink + re-image, seconds.
+- **Fetch is a no-op once sources exist; `-update` opts into following
+  upstream.** It pulls git caches (`git pull --ff-only`; tarballs are
+  pinned by the recipe URL — bump the version and clean the cache to
+  move) and refreshes the per-platform trees with `rsync -a --checksum`
+  and no `--delete`: content-equal files are not touched (no spurious
+  rebuilds), build artifacts survive (they don't exist in the cache),
+  and only genuinely changed sources get a fresh mtime for make. Not
+  the default on purpose: a plain build must never surprise you with
+  an upstream drive-by.
 - **appinit is generated** from the recipe list (externs +
   `Tcl_StaticLibrary` calls) into the platform template. On Windows the
   template also registers `Registry`/`Dde` — in a static build their

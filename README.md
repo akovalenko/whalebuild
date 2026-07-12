@@ -46,6 +46,11 @@ bin/whalebuild build -flavor cli        # -> work/linux/whale-cli
 # e.g. treectrl pulls in tk):
 bin/whalebuild build -pkgs {tk sqlite3 thread}
 
+# follow upstream: pull git sources and carefully resync the build
+# trees (only genuinely changed files are touched, so the rebuild
+# stays incremental); tarball sources are pinned by the recipe:
+bin/whalebuild build -update
+
 # win64 cross (requires the Linux build first — its native tclsh
 # drives `zipfs mkimg` and the thread extension's cross-configure):
 bin/whalebuild build -platform win64
@@ -84,7 +89,8 @@ The extension list is configurable per build (`-pkgs`); named *flavors*
 
 Linux host with: gcc, make, curl, git, unzip, a `tclsh` (any 8.6+, only
 to run the driver), Tcl/Tk build deps (zlib, X11/Xft headers for Tk),
-`x86_64-w64-mingw32-gcc` for win64, OpenSSL headers for the tls recipe.
+`x86_64-w64-mingw32-gcc` for win64, OpenSSL headers for the tls recipe,
+rsync for `-update`.
 Testing win64 output needs wine; GUI self-test uses Xvfb if present.
 
 ## Status

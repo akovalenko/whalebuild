@@ -166,12 +166,22 @@ proc FetchTarball {url dst log} {
 }
 
 proc FetchCache {name} {
-    # Pristine source tree in the shared cache: fetched once, never built.
-    global Root
+    # Pristine source tree in the shared cache: fetched once; -update
+    # pulls git sources (tarballs are pinned by URL — bump the recipe
+    # and clean the cache to move).
+    global Root Update
     set dst [file join $Root work cache $name]
-    if {[file exists $dst]} {return $dst}
     set src [R $name source]
     set log [file join $Root work cache logs fetch-$name.log]
+    if {[file exists $dst]} {
+	if {$Update && [lindex $src 0] eq "git"
+		&& ![info exists ::Pulled($dst)]} {
+	    set ::Pulled($dst) 1
+	    msg "update $name (git pull)"
+	    RunIn $dst $log git pull --ff-only
+	}
+	return $dst
+    }
     switch -- [lindex $src 0] {
 	tarball {
 	    msg "fetch $name ([lindex $src 1])"
@@ -191,13 +201,26 @@ proc Fetch {name} {
     # Per-platform source tree, copied from the cache. Everything builds
     # in-tree (out-of-tree builds of third-party extensions used to break
     # in subtle ways), so each platform owns a full copy it may dirty.
-    global P
+    # With -update the existing copy is refreshed by a careful rsync:
+    # --checksum leaves content-equal files untouched (no spurious
+    # rebuilds), no --delete keeps build artifacts, and only genuinely
+    # changed sources get a fresh mtime for make to notice.
+    global P Update
     switch -- [lindex [R $name source] 0] {
 	tclpkgs {return [Fetch tcl]}
 	from    {return [Fetch [lindex [R $name source] 1]]}
     }
     set dst [SrcDir $name]
-    if {[file exists $dst]} {return $dst}
+    if {[file exists $dst]} {
+	if {$Update && ![info exists ::Synced($dst)]} {
+	    set ::Synced($dst) 1
+	    set cache [FetchCache $name]
+	    msg "sync $name into [dict get $P name] tree (rsync)"
+	    Run [file join [dict get $P logs] sync-$name.log] \
+		rsync -a --checksum $cache/ $dst/
+	}
+	return $dst
+    }
     set cache [FetchCache $name]
     file mkdir [file dirname $dst]
     msg "copy $name into [dict get $P name] tree"
@@ -547,18 +570,33 @@ proc Profile {platform} {
 }
 
 proc BuildCmd {argv} {
-    global Root Recipes P Native
+    global Root Recipes P Native Update
     set platform linux
     set flavor {}
     set pkgs {}
     set appdir {}
     set out {}
     set jobs 4
+    set Update 0
     set Native {}
     if {[info exists ::env(WHALEBUILD_NATIVE_TCLSH)]} {
 	set Native $::env(WHALEBUILD_NATIVE_TCLSH)
     }
-    foreach {opt val} $argv {
+    for {set i 0} {$i < [llength $argv]} {incr i} {
+	set opt [lindex $argv $i]
+	switch -- $opt {
+	    -update   {set Update 1; continue}
+	    -platform -
+	    -pkgs -
+	    -flavor -
+	    -app -
+	    -out -
+	    -jobs -
+	    -native   {}
+	    default   {die "unknown option '$opt'"}
+	}
+	if {[incr i] >= [llength $argv]} {die "option $opt needs a value"}
+	set val [lindex $argv $i]
 	switch -- $opt {
 	    -platform {set platform $val}
 	    -pkgs     {set pkgs $val}
@@ -567,7 +605,6 @@ proc BuildCmd {argv} {
 	    -out      {set out [file normalize $val]}
 	    -jobs     {set jobs $val}
 	    -native   {set Native [file normalize $val]}
-	    default   {die "unknown option '$opt'"}
 	}
     }
     if {$flavor ne "" && [llength $pkgs]} {
@@ -661,7 +698,7 @@ proc BuildCmd {argv} {
 if {[llength $argv] == 0 || [lindex $argv 0] ni {build}} {
     puts stderr "usage: whalebuild build ?-platform linux|win64?\
 	?-flavor all|cli? ?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file?\
-	?-jobs N? ?-native tclsh9?"
+	?-jobs N? ?-native tclsh9? ?-update?"
     exit 2
 }
 BuildCmd [lrange $argv 1 end]
