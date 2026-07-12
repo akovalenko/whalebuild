@@ -160,6 +160,27 @@ if {![catch {package require tdbc::sqlite3}]} {
     say "skip tdbc::sqlite3: not compiled in"
 }
 
+# tdbc's C drivers (mysql, odbc, postgres) compile self-contained and
+# Tcl_LoadFile the real client library at package require time. A
+# failed require on a machine without that library is fine — as long
+# as it is the CLIENT loader failing, not the static plumbing ("can't
+# find package" = pkgindex/registration broken).
+foreach drv {mysql odbc postgres} {
+    if {![catch {package require tdbc::$drv} v]} {
+	if {[llength [info commands ::tdbc::${drv}::connection]]} {
+	    say "ok   tdbc-$drv: $v (client library present)"
+	} else {
+	    say "FAIL tdbc-$drv: loaded but no connection class"
+	    incr failed
+	}
+    } elseif {![string match {can't find package*} $v]} {
+	say "ok   tdbc-$drv: static init ok, no client library here"
+    } else {
+	say "FAIL tdbc-$drv: $v"
+	incr failed
+    }
+}
+
 if {![catch {package require tdom}]} {
     check tdom {
 	set doc [dom parse {<batteries kind="static">

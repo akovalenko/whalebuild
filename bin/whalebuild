@@ -632,7 +632,7 @@ proc Link {exts out} {
     }
     foreach name $exts {
 	dict for {plat flags} [R $name libs] {
-	    if {$plat ne [dict get $P name]} continue
+	    if {$plat ni [list * [dict get $P name]]} continue
 	    # @SRC@ -> the recipe's source tree (e.g. an in-tree
 	    # prebuilt library shipped with the extension);
 	    # @CACHE@ -> work/cache (shared cross-built ingredients).

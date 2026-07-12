@@ -1,0 +1,19 @@
+# TDBC driver for PostgreSQL, bundled in the Tcl source tarball
+# (pkgs/). Same self-contained scheme as tdbcmysql: fake client
+# headers + a runtime Tcl_LoadFile of libpq at `package require`
+# time; no build-time client dependency.
+#
+# `libs *`: the Tdbc stub archive after its consumer — see
+# tdbcmysql.rcp.
+version 1.1.13
+source tclpkgs tdbcpostgres1.1.13
+requires {tdbc}
+init Tdbcpostgres
+libs * {@SRC@/../tdbc1.1.13/libtdbcstub.a}
+vfs {library/tdbcpostgres.tcl}
+pkgindex {
+    package ifneeded tdbc::postgres 1.1.13 [list ::apply {{dir} {
+	source -encoding utf-8 [file join $dir tdbcpostgres.tcl]
+	load {} Tdbcpostgres
+    }} $dir]
+}

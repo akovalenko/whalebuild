@@ -1,8 +1,10 @@
 # TDBC base (Tcl DataBase Connectivity), bundled in the Tcl source
 # tarball (pkgs/): a small C part (SQL tokenizer et al.) plus TclOO
-# base classes in tdbc.tcl. Drivers are separate packages — the kit
-# carries tdbc::sqlite3 (pure Tcl); tdbcmysql/odbc/postgres are left
-# out on purpose, they need external client libraries.
+# base classes in tdbc.tcl. Drivers are separate packages, all four
+# aboard: tdbc::sqlite3 (pure Tcl) and the C trio mysql/odbc/postgres
+# — the early guess that those need client libraries at build time
+# was wrong (fake headers; the real client library is loaded at
+# `package require`), see tdbcmysql.rcp.
 version 1.1.13
 source tclpkgs tdbc1.1.13
 init Tdbc

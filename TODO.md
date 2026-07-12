@@ -7,9 +7,11 @@ upstream assessment — verify before each port.
 
 ## Already aboard
 
-tk, sqlite3, thread, tls, tcllib + tcllibc, treectrl, twapi
-(3.0.0 → 5.x), Registry/Dde (folded into the static core),
-itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
+tk, sqlite3 (full option set: FTS5, rtree, math...), thread, tls,
+tcllib + tcllibc, treectrl, twapi (3.0.0 → 5.x), Registry/Dde
+(folded into the static core), itcl, tdbc with all four drivers
+(sqlite3, plus the client-less-at-build C trio mysql/odbc/postgres),
+tdom (0.8.3 → 0.9.6), Img/tkimg
 (1.3 → 2.1.1, all format handlers incl. the four codec support
 packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13),
 Tkhtml (3.0 → 3.0.2, BAWT snapshot), bwidget (1.x → 1.10.1),

@@ -1,0 +1,24 @@
+# TDBC driver for MySQL/MariaDB, bundled in the Tcl source tarball
+# (pkgs/). Compiles SELF-CONTAINED: fake client headers plus a stub
+# loader that Tcl_LoadFile's the real client library at `package
+# require` time — no build-time client dependency at all. On a
+# machine without libmariadb/libmysqlclient the require fails with
+# the loader's error; where the library exists the driver just works.
+# That runtime-dynamic design is why this battery can ride in a
+# static kit that promises nothing about the target machine.
+#
+# The driver consumes the Tdbc STUB archive (Tdbc_InitStubs), and
+# tdbc's own recipe archives sit EARLIER in the single-pass link —
+# so the stub library rides here, after the consumer (`libs *`).
+version 1.1.13
+source tclpkgs tdbcmysql1.1.13
+requires {tdbc}
+init Tdbcmysql
+libs * {@SRC@/../tdbc1.1.13/libtdbcstub.a}
+vfs {library/tdbcmysql.tcl}
+pkgindex {
+    package ifneeded tdbc::mysql 1.1.13 [list ::apply {{dir} {
+	source -encoding utf-8 [file join $dir tdbcmysql.tcl]
+	load {} Tdbcmysql
+    }} $dir]
+}

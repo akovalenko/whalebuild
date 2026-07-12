@@ -141,6 +141,11 @@ recipes and the driver encode these so users don't have to.
   `-municode -mconsole -static-libgcc` like the stock tclsh.exe.
 - Static lib names differ per platform (`libtcl9.0.a` vs `libtcl90.a`);
   the driver globs instead of hardcoding.
+- Known wine flake (seen twice, 2026-07-12): the FIRST run of a
+  freshly built whale.exe in a warm prefix can page-fault on a NULL
+  read inside TclpAlloc during the twapi selftest check; every rerun
+  and every reduced probe passes. Recorded so it isn't rediscovered;
+  kill the stuck run, `wineserver -k`, rerun.
 
 ## TWAPI (win64-only)
 

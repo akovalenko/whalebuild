@@ -1,0 +1,21 @@
+# TDBC driver for ODBC, bundled in the Tcl source tarball (pkgs/).
+# Same self-contained scheme as tdbcmysql: fake headers + a runtime
+# Tcl_LoadFile of the ODBC manager (odbc32 on Windows — ALWAYS
+# present, making this the one tdbc driver guaranteed live on every
+# win64 target; libodbc/libiodbc on unix, where it needs unixODBC
+# installed). No build-time client dependency.
+#
+# `libs *`: the Tdbc stub archive after its consumer — see
+# tdbcmysql.rcp.
+version 1.1.13
+source tclpkgs tdbcodbc1.1.13
+requires {tdbc}
+init Tdbcodbc
+libs * {@SRC@/../tdbc1.1.13/libtdbcstub.a}
+vfs {library/tdbcodbc.tcl}
+pkgindex {
+    package ifneeded tdbc::odbc 1.1.13 [list ::apply {{dir} {
+	source -encoding utf-8 [file join $dir tdbcodbc.tcl]
+	load {} Tdbcodbc
+    }} $dir]
+}
