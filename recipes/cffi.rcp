@@ -30,10 +30,15 @@ ingredient tclh * {
 	cp -R include @OUT@/include
     }
 }
+# --disable-multi-os-directory: libffi's configure otherwise appends
+# `$CC -print-multi-os-directory` to libdir — `.` on Debian-family
+# (multiarch), but `../lib64` on EL, silently moving libffi.a to
+# lib64/ out from under the `libs` path below.
 ingredient libffi-linux linux {
     source tarball https://github.com/libffi/libffi/releases/download/v3.7.1/libffi-3.7.1.tar.gz
     build {
 	./configure --disable-shared --disable-docs \
+	    --disable-multi-os-directory \
 	    --prefix=@OUT@ --libdir=@OUT@/lib
 	make -j@JOBS@
 	make install
@@ -43,6 +48,7 @@ ingredient libffi-win64 win64 {
     source tarball https://github.com/libffi/libffi/releases/download/v3.7.1/libffi-3.7.1.tar.gz
     build {
 	./configure --host=x86_64-w64-mingw32 --disable-shared --disable-docs \
+	    --disable-multi-os-directory \
 	    --prefix=@OUT@ --libdir=@OUT@/lib
 	make -j@JOBS@
 	make install
