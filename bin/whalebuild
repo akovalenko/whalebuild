@@ -426,6 +426,7 @@ proc ExtBuild {name} {
 		msg "postconf $name"
 		RunIn $bdir $log sh -c [string map \
 		    [list @HOST@ [dict get $P host] \
+			 @NATIVE@ [NativeTclsh] \
 			 @CACHE@ [file join $Root work cache]] $script]
 	    }
 	}

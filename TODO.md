@@ -11,7 +11,8 @@ tk, sqlite3, thread, tls, tcllib + tcllibc, treectrl, twapi
 (3.0.0 → 5.x), Registry/Dde (folded into the static core),
 itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
 (1.3 → 2.1.1, all format handlers incl. the four codec support
-packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13).
+packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13),
+Tkhtml (3.0 → 3.0.2, BAWT snapshot).
 
 ## Easy wins — bundled in the Tcl 9 tarball (`source tclpkgs`)
 
@@ -41,14 +42,6 @@ packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13).
   replacement.
 - **tktray** (was 1.3.8, X11) — system tray; on Windows the old
   Winico role is covered by twapi. Check freedesktop-era relevance.
-- **Tkhtml** (was 3.0) — upstream dead, but BAWT ships a maintained
-  snapshot (`Tkhtml-3.0.2.7z` at bawt.tcl3d.org, base
-  github.com/olebole/tkhtml3): TEA bumped to 3.9 and `Tcl_Size`
-  touches present (Tcl 9-shaped), gcc-only on Windows, needs
-  permissive CFLAGS plus a -O2→-O1 workaround for 64-bit mingw
-  (BAWT's recipe notes a codegen bug). Recipe path: `source git`
-  olebole/tkhtml3 if it carries the same fixes, else vendor the
-  BAWT snapshot (needs a 7z/plain-dir source kind in the driver).
 
 ## Superseded — do not port, note the replacement
 

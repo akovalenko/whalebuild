@@ -1,0 +1,25 @@
+# Tkhtml 3.0.2 — the html widget (CSS-capable Tkhtml3 line). Upstream
+# is dead; the pinned source is BAWT's maintained snapshot (base
+# github.com/olebole/tkhtml3, TEA bumped to 3.9, Tcl_Size touches —
+# Tcl 9-shaped), exactly the case the 7z source kind anticipated.
+# The default style/script layer is EMBEDDED: mkdefaultstyle.tcl bakes
+# src/tkhtml.tcl + html.css into htmldefaultstyle.c at build time, so
+# the image carries no script part and the static pkgindex is bare.
+# `binaries` only: the doc target runs a Tcl macro processor.
+#
+# Codegen (htmltokens, cssprop, htmldefaultstyle) runs $(TCLSH) from
+# the Makefile — under cross that variable points at the unrunnable
+# win64 tclsh, so postconf reseats it on the build host's native one.
+# The same sed applies BAWT's field-tested -O2 → -O1 workaround for a
+# 64-bit mingw codegen bug (their recipe carries it unconditionally
+# for 64-bit Windows release builds; kept verbatim, not re-verified).
+version 3.0.2
+source 7z https://bawt.tcl3d.org/download/InputLibs/Tkhtml-3.0.2.7z
+requires tk
+maketarget binaries
+postconf win64 {sed -i -e 's|^TCLSH_PROG.*|TCLSH_PROG = @NATIVE@|' \
+    -e 's/-O2/-O1/g' Makefile}
+init Tkhtml Tkhtml_SafeInit
+pkgindex {
+    package ifneeded Tkhtml 3.0.2 {load {} Tkhtml}
+}

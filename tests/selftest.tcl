@@ -258,6 +258,23 @@ if {($tcl_platform(platform) eq "windows"
     } else {
 	say "skip tkdnd: not compiled in"
     }
+    if {![catch {package require Tkhtml}]} {
+	check tkhtml {
+	    html .html
+	    .html parse -final {<html><body>
+		<h1>Whale</h1><p class="b">batteries included</p>
+	    </body></html>}
+	    update
+	    set h1 [.html search h1]
+	    set ps [.html search p.b]
+	    set r [list version [package present Tkhtml] \
+		h1 [llength $h1] p.b [llength $ps]]
+	    destroy .html
+	    set r
+	}
+    } else {
+	say "skip tkhtml: not compiled in"
+    }
     if {![catch {package require img::jpeg}]} {
 	check tkimg {
 	    # jpeg and tiff live outside the Tk core (unlike png/gif),
