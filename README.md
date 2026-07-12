@@ -75,9 +75,20 @@ unzip -l myapp.kit                        # sdx unwrap/ls analog: it is a zip
 ```
 
 `-exec` prepends `#!/usr/bin/env whale` (zip readers ignore prefix
-data) and marks the file executable. For a standalone single-file
-application use `build -app dir -out file` instead — that bakes the
-app into the whale itself.
+data) and marks the file executable.
+
+For a standalone single-file application (the *starpack*), bake the
+app into a whale — either at build time (`build -app dir -out file`)
+or, with no toolchain at all, onto an existing whale:
+
+```sh
+bin/whalebuild pack myapp/ myapp        # runtime: work/linux/whale
+bin/whalebuild pack -runtime work/win64/whale-cli.exe myapp/ myapp.exe
+```
+
+`pack` merges the runtime's attached image with the app dir and
+re-attaches the result; re-packing an already-packed whale works too
+(images never stack — see NOTES.md).
 
 ## Recipes
 

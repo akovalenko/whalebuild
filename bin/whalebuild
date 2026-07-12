@@ -594,6 +594,81 @@ proc WrapCmd {argv} {
     msg "done: $out"
 }
 
+# ---------------------------------------------------------------- pack --
+
+proc PackCmd {argv} {
+    # sdx `wrap -runtime` analog (a starpack), no toolchain involved:
+    # take an EXISTING whale, merge its image with an app dir, attach
+    # the merged image to the whale's bare prefix. The core does the
+    # heavy lifting: `zipfs mkimg ... infile` copies only passOffset
+    # bytes of infile — i.e. it strips an already-attached image
+    # itself. Works with any zipfs-capable Tcl 9 as the packer, and
+    # any whale (or other zipfs kit) as the runtime.
+    global Root Native
+    set Native {}
+    if {[info exists ::env(WHALEBUILD_NATIVE_TCLSH)]} {
+	set Native $::env(WHALEBUILD_NATIVE_TCLSH)
+    }
+    set runtime {}
+    set paths {}
+    for {set i 0} {$i < [llength $argv]} {incr i} {
+	set opt [lindex $argv $i]
+	switch -- $opt {
+	    -runtime {
+		if {[incr i] >= [llength $argv]} {die "-runtime needs a value"}
+		set runtime [file normalize [lindex $argv $i]]
+	    }
+	    -native {
+		if {[incr i] >= [llength $argv]} {die "-native needs a value"}
+		set Native [file normalize [lindex $argv $i]]
+	    }
+	    default {lappend paths $opt}
+	}
+    }
+    if {[llength $paths] != 2} {
+	die "usage: whalebuild pack ?-runtime whale? appdir out"
+    }
+    lassign $paths indir out
+    set indir [file normalize $indir]
+    set out [file normalize $out]
+    if {$runtime eq ""} {
+	set runtime [file join $Root work linux whale]
+    }
+    if {![file exists $runtime]} {die "pack: no runtime at $runtime"}
+    if {$out eq $runtime} {die "pack: output would clobber the runtime"}
+    if {![file exists [file join $indir main.tcl]]} {
+	die "pack: $indir must contain main.tcl"
+    }
+
+    set vfs [file join $Root work pack-vfs]
+    set log [file join $Root work cache logs pack.log]
+    msg "pack [file tail $indir] onto [file tail $runtime] ->\
+	[file tail $out]"
+    set script {}
+    append script "proc merge {src dst} {\n"
+    append script "    foreach f \[glob -nocomplain -directory \$src *\] {\n"
+    append script "        set t \[file join \$dst \[file tail \$f\]\]\n"
+    append script "        if {\[file isdirectory \$f\]} {\n"
+    append script "            file mkdir \$t\n"
+    append script "            merge \$f \$t\n"
+    append script "        } else {\n"
+    append script "            file copy -force \$f \$t\n"
+    append script "        }\n"
+    append script "    }\n"
+    append script "}\n"
+    append script [list zipfs mount $runtime //zipfs:/whalepack]\n
+    append script [list file delete -force $vfs]\n
+    append script [list file mkdir $vfs]\n
+    append script [list merge //zipfs:/whalepack $vfs]\n
+    append script [list merge $indir $vfs]\n
+    append script [list zipfs unmount //zipfs:/whalepack]\n
+    append script [list zipfs mkimg $out $vfs $vfs {} $runtime]\n
+    Run $log [NativeTclsh] << $script
+    file delete -force $vfs
+    file attributes $out -permissions 0o755
+    msg "done: $out"
+}
+
 # ---------------------------------------------------------------- main --
 
 proc Profile {platform} {
@@ -751,11 +826,13 @@ proc BuildCmd {argv} {
 switch -- [lindex $argv 0] {
     build {BuildCmd [lrange $argv 1 end]}
     wrap  {WrapCmd [lrange $argv 1 end]}
+    pack  {PackCmd [lrange $argv 1 end]}
     default {
 	puts stderr "usage: whalebuild build ?-platform linux|win64?\
 	    ?-flavor all|cli? ?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file?\
 	    ?-jobs N? ?-native tclsh9? ?-update?\n\
-	    \ \ \ whalebuild wrap ?-exec? ?-native tclsh9? appdir out.kit"
+	    \ \ \ whalebuild wrap ?-exec? ?-native tclsh9? appdir out.kit\n\
+	    \ \ \ whalebuild pack ?-runtime whale? ?-native tclsh9? appdir out"
 	exit 2
     }
 }

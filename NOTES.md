@@ -45,6 +45,14 @@ recipes and the driver encode these so users don't have to.
   `zipfs mkimg`'s infile parameter. Old mk4-format kits are NOT
   readable (see TODO.md — KitCreator keeps tclvfs/vfs::mk4 alive on
   Tcl 9 if that compat is ever wanted).
+- **Starpacks without a toolchain.** `whalebuild pack` merges an
+  existing whale's mounted image with the app dir into a fresh vfs
+  and re-attaches it. The core does the delicate part:
+  `zipfs mkimg ... infile` copies only `passOffset` bytes of infile —
+  it strips an already-attached image by itself — so any built whale
+  serves as a runtime, images never stack, and re-packing a packed
+  whale just works. The packer is any zipfs-capable Tcl 9 (a whale
+  can pack itself).
 - **Fetch is a no-op once sources exist; `-update` opts into following
   upstream.** It pulls git caches (`git pull --ff-only`; tarballs are
   pinned by the recipe URL — bump the version and clean the cache to
