@@ -141,6 +141,21 @@ recipes and the driver encode these so users don't have to.
   `-municode -mconsole -static-libgcc` like the stock tclsh.exe.
 - Static lib names differ per platform (`libtcl9.0.a` vs `libtcl90.a`);
   the driver globs instead of hardcoding.
+- Windows CURSOR/icon resources: the driver runs `windres` on Tk's
+  `win/rc/tk_base.rc` and links the object into the whale (win64 +
+  Tk). Why it matters: tkWinCursor's native name table is tiny
+  (`arrow`, `ibeam`, `watch`, `xterm`, `hand2`, `question_arrow`,
+  `crosshair`, `fleur`, `size_*`, …); every OTHER X11 cursor name
+  (`left_ptr`, `hand1`, `pirate`, `top_left_arrow`, …) resolves only
+  via a fallback `LoadCursor(hInstance, name)` against these
+  compiled-in resources. Stock wish.exe gets them from
+  `wish.rc`→`tk_base.rc`; the hand-linked whale did NOT, so
+  `-cursor left_ptr` (bwidget's read-only `Entry` uses it) errored
+  `bad cursor spec`. `tk_base.rc` needs only `<windows.h>`/`<dlgs.h>`
+  and names its `.cur`/`.ico` files relatively, so windres runs in
+  the rc dir; the object also carries the app icon + file-dialog
+  template. windres/objcopy come from mingw-w64-binutils (pulled by
+  mingw-w64-gcc), so the containers already have them.
 - Known wine flake (2026-07-12): the FULL selftest intermittently
   page-faults on a NULL read inside TclpAlloc during the twapi check
   (~50%, non-deterministic — the SAME warm exe passes one run and

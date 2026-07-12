@@ -673,6 +673,26 @@ proc Link {exts out} {
 	-c -o $o $c
 
     set objs [list $o]
+
+    # Windows: compile Tk's base resource script into the exe. Its
+    # X11-named CURSOR resources (left_ptr, hand1, watch, ...) are how
+    # `-cursor left_ptr` works on Windows at all: tkWinCursor's native
+    # name table is tiny, and everything outside it falls back to
+    # LoadCursor(hInstance, name) against these compiled-in resources
+    # (also carries the app icon + the file dialog template). Stock
+    # wish.exe links wish.rc -> tk_base.rc via windres; the whale is
+    # linked by hand, so without this every X11 cursor name (bwidget's
+    # entry uses left_ptr) errors "bad cursor spec". tk_base.rc pulls
+    # only <windows.h>/<dlgs.h> and names the .cur/.ico files
+    # relatively, so windres runs in the rc dir.
+    if {[dict get $P name] eq "win64" && $withtk} {
+	set rcdir [file join [SrcDir tk] win rc]
+	set res [file join [dict get $P builds] tkbase-res.o]
+	msg "windres tk_base.rc (win cursors + icon)"
+	RunIn $rcdir $log [dict get $P windres] \
+	    --include-dir . tk_base.rc -o $res
+	lappend objs $res
+    }
     set ldextra {}
     foreach name $exts {
 	if {[R $name buildstyle] in {tea critcl}} {
@@ -960,6 +980,7 @@ proc Profile {platform} {
 		subdir win host x86_64-w64-mingw32 \
 		cc x86_64-w64-mingw32-gcc exe .exe \
 		objcopy x86_64-w64-mingw32-objcopy \
+		windres x86_64-w64-mingw32-windres \
 		appinit appinit-win.c.in \
 		cflags {-O2 -DUNICODE -D_UNICODE -DSTATIC_BUILD} \
 		ldflags {-municode -static-libgcc -static}]]
