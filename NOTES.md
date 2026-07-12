@@ -187,6 +187,26 @@ recipes and the driver encode these so users don't have to.
     absence of the bug; wine is as legitimate a winapi implementor
     as any (a wine contract violation, if ever shown, would relocate
     the blame — none is shown).
+  - ROOT CAUSE (2026-07-12, evening): upstream ticket [06f19cc401]
+    "socket_*-12.3 crashes on Windows 11". Tcl's Windows socket
+    implementation runs a helper "socket thread" that sees per-thread
+    socket state through a shared list; on Tcl-thread exit,
+    TclFinalizeIOSubsystem frees that state WITHOUT the CutChannel
+    unlink, and the helper thread then touches freed memory (the
+    timing of the socket-closure window message decides — hence the
+    flakiness). Our selftest hits the exact scenario: the tls check's
+    server thread exits via thread::release still holding its
+    listening TLS socket. The corruption plants there and the corpse
+    surfaces wherever the freed block got reused — zippy metadata on
+    the stock build, a literal-table Tcl_Obj during the twapi check's
+    package-require compile on the PURIFY build. Reproduced upstream
+    on real Windows 11 and GitHub CI: wine merely exposes it more
+    readily, it is not a wine artifact. Fixed on main for 9.1 only
+    (CutChannel before the close in TclFinalizeIOSubsystem, ifdef
+    _WIN32, merge 8f4e1bf7e5); deliberately NOT backported to 9.0.x
+    ("needs substantial airtime"). Candidate whalebuild response:
+    carry that one-liner as a core patch on 9.0.4 and A/B the
+    selftest loop under wine.
   - Debug-info workflow: `WHALEBUILD_CFLAGS=-g ./cbuild.sh win64`
     (after wiping the platform work tree — flags bake at configure
     time) builds the whole kit — core, TEA extensions, appinit —
