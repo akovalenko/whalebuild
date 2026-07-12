@@ -156,6 +156,16 @@ recipes and the driver encode these so users don't have to.
   interaction, not a recipe bug — the real-Windows test is still
   outstanding. Practically: rerun; kill the stuck run, `wineserver
   -k`, rerun.
+  - LOCALIZED (2026-07-12): a core rebuilt with `-DPURIFY` — Tcl's
+    knob that drops the zippy per-thread allocator so TclpAlloc goes
+    straight to malloc — passed the full selftest 8/8 under wine,
+    against the stock build's ~50% fault rate (p ~ 0.004 by chance).
+    So the race lives in Tcl's threaded allocator (tclThreadAlloc.c),
+    almost certainly its per-thread cache setup/teardown racing wine's
+    TLS, not in any recipe. The knob rides in the driver as
+    WHALEBUILD_CORE_CFLAGS (CoreBuild) for anyone who needs a
+    zippy-free kit; NOT made the default — zippy is the faster
+    allocator for threaded Tcl and the fault is unproven off wine.
 
 ## TWAPI (win64-only)
 

@@ -369,6 +369,14 @@ proc CoreBuild {name} {
     if {$name eq "tk"} {
 	lappend conf --with-tcl=[file join [dict get $P inst] lib]
     }
+    # WHALEBUILD_CORE_CFLAGS: extra CFLAGS for the Tcl/Tk core build
+    # only (TEA keeps its own -O2 in CFLAGS_DEFAULT and appends this).
+    # For experiments on the core — e.g. -DPURIFY to drop the zippy
+    # threaded allocator, -fsanitize=..., -g. Empty/unset = untouched.
+    if {[info exists ::env(WHALEBUILD_CORE_CFLAGS)]
+	    && $::env(WHALEBUILD_CORE_CFLAGS) ne ""} {
+	lappend conf CFLAGS=$::env(WHALEBUILD_CORE_CFLAGS)
+    }
     if {![file exists [file join $bdir Makefile]]} {
 	msg "configure $name"
 	RunIn $bdir $log {*}$conf
