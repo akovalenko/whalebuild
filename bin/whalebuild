@@ -38,6 +38,17 @@ proc RunIn {dir log args} {
     try { Run $log {*}$args } finally { cd $here }
 }
 
+proc RunTcl {log script} {
+    # Feed a script to the native tclsh with REAL failure propagation.
+    # tclsh evaluating stdin is a REPL even when stdin is a pipe: an
+    # uncaught error is printed and evaluation CONTINUES, exiting 0 at
+    # EOF — so a failed script passes silently (bit us for real:
+    # `zipfs mkimg` hit ETXTBSY, the build still said "done" and left
+    # yesterday's whale in place). Wrap so any error exits nonzero.
+    set wrapped "if \[catch [list $script] err\] {puts stderr \$err; exit 1}"
+    Run $log [NativeTclsh] << $wrapped\n
+}
+
 proc Glob1 {args} {
     # First match of a glob, or empty.
     lindex [lsort [glob -nocomplain {*}$args]] 0
@@ -672,8 +683,7 @@ proc Image {exts bare out appdir} {
     }
 
     msg "zipfs mkimg [file tail $out]"
-    set script [list zipfs mkimg $out $vfs $vfs {} $bare]
-    Run $log [NativeTclsh] << $script\n
+    RunTcl $log [list zipfs mkimg $out $vfs $vfs {} $bare]
     file attributes $out -permissions 0o755
 }
 
@@ -722,7 +732,7 @@ proc WrapCmd {argv} {
     } else {
 	set script [list zipfs mkzip $out $indir $indir]
     }
-    Run $log [NativeTclsh] << $script\n
+    RunTcl $log $script
     if {$exec} {
 	file delete $out.hdr
 	file attributes $out -permissions 0o755
@@ -799,7 +809,7 @@ proc PackCmd {argv} {
     append script [list merge $indir $vfs]\n
     append script [list zipfs unmount //zipfs:/whalepack]\n
     append script [list zipfs mkimg $out $vfs $vfs {} $runtime]\n
-    Run $log [NativeTclsh] << $script
+    RunTcl $log $script
     file delete -force $vfs
     file attributes $out -permissions 0o755
     msg "done: $out"
