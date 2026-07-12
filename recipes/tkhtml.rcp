@@ -13,10 +13,21 @@
 # The same sed applies BAWT's field-tested -O2 → -O1 workaround for a
 # 64-bit mingw codegen bug (their recipe carries it unconditionally
 # for 64-bit Windows release builds; kept verbatim, not re-verified).
+#
+# CFLAGS: gcc >= 14 escalates -Wincompatible-pointer-types to an
+# error, and this 2005-era code trips it all over — K&R-declared
+# hash procs (unsigned int (*)()) stuffed into Tcl 9's widened
+# Tcl_HashKeyType (size_t return). Benign on x86-64 (32-bit returns
+# come back zero-extended), and the only fresh-gcc error class in
+# the tree (probed with -Werror=implicit-function-declaration,
+# int-conversion, implicit-int too) — so it is waved through, not
+# fixed: the snapshot is pinned and patch-free by policy. -pipe
+# restores TEA's default user CFLAGS the override displaces.
 version 3.0.2
 source 7z https://bawt.tcl3d.org/download/InputLibs/Tkhtml-3.0.2.7z
 requires tk
 maketarget binaries
+confargs {{CFLAGS=-pipe -Wno-error=incompatible-pointer-types}}
 postconf win64 {sed -i -e 's|^TCLSH_PROG.*|TCLSH_PROG = @NATIVE@|' \
     -e 's/-O2/-O1/g' Makefile}
 init Tkhtml Tkhtml_SafeInit
