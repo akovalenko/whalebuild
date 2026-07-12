@@ -138,10 +138,13 @@ cache and incremental rebuilds survive container death:
   a linux install.
 
 ```sh
-./cbuild.sh linux -jobs 8      # -> work-linux/linux/whale
-./cbuild.sh win64 -jobs 8      # -> work-win64/win64/whale.exe
-./cbuild.sh linux selftest     # headless GUI selftest via xvfb-run
-./cbuild.sh <leg> -- sh        # poke around inside the box
+./cbuild.sh linux -jobs 8            # -> work-linux/linux/whale
+./cbuild.sh win64 -jobs 8            # -> work-win64/win64/whale.exe
+./cbuild.sh linux -flavor cli        # any build args pass through:
+./cbuild.sh linux -pkgs 'tk sqlite3' # ...-flavor, -pkgs, -update, -app
+./cbuild.sh linux selftest           # headless selftest via xvfb-run
+./cbuild.sh linux selftest cli       # ...of the cli-flavor whale
+./cbuild.sh <leg> -- sh              # poke around inside the box
 ```
 
 Rootless podman, `--userns=keep-id`: artifacts come out owned by the

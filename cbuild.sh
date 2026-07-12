@@ -7,12 +7,15 @@
 #
 #   ./cbuild.sh linux [-jobs 8 ...]    -> work-linux/linux/whale
 #   ./cbuild.sh win64 [-jobs 8 ...]    -> work-win64/win64/whale.exe
-#   ./cbuild.sh linux selftest        headless GUI selftest (xvfb-run)
+#   ./cbuild.sh linux selftest [cli]  headless selftest (xvfb-run)
 #   ./cbuild.sh <leg> -- <cmd...>     arbitrary command in the box
 #   ./cbuild.sh <leg> -- sh           poke around interactively
 #
 # Everything after the leg (except the two verbs above) is passed to
-# `bin/whalebuild build -platform <leg>` verbatim.
+# `bin/whalebuild build -platform <leg>` verbatim — -flavor cli,
+# -pkgs, -update, -app, -out all work; quote a -pkgs list as one
+# shell word: -pkgs 'tk sqlite3'. `selftest cli` tests the cli-flavor
+# artifact (whale-cli) instead of the default whale.
 #
 # Rootless podman with --userns=keep-id: artifacts in work-<leg>/
 # come out owned by the invoking user. HOME inside is /tmp — keep-id
@@ -54,7 +57,8 @@ case "${1:-}" in
                  "the win64 leg is tested under wine on the host" >&2
             exit 2
         fi
-        crun xvfb-run -a work/linux/whale tests/selftest.tcl
+        shift
+        crun xvfb-run -a "work/linux/whale${1:+-$1}" tests/selftest.tcl
         ;;
     --) shift; crun "$@" ;;
     *)  crun bin/whalebuild build -platform "$leg" "$@" ;;

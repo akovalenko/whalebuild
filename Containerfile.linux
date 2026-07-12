@@ -20,9 +20,12 @@
 
 FROM docker.io/library/almalinux:9
 
+# No `curl` in the list: the base image ships curl-minimal (same
+# /usr/bin/curl, http/https aboard — all the driver needs), and the
+# full package CONFLICTS with it instead of upgrading.
 RUN dnf -y install epel-release \
     && dnf -y --enablerepo=crb install \
-        tcl gcc make git curl tar unzip rsync findutils diffutils \
+        tcl gcc make git tar gzip unzip rsync findutils diffutils \
         p7zip p7zip-plugins \
         openssl-devel libuuid-devel zlib-devel \
         libX11-devel libXext-devel libXft-devel \
