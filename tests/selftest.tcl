@@ -204,6 +204,40 @@ if {![catch {package require udp}]} {
     say "skip udp: not compiled in"
 }
 
+if {![catch {package require cffi}]} {
+    check cffi {
+	# both halves of libffi: a forward call (ffi_call) and a Tcl
+	# proc turned C function pointer (ffi_closure) that qsort calls
+	cffi::alias load C    ;# size_t & friends
+	if {$tcl_platform(platform) eq "windows"} {
+	    cffi::Wrapper create crt msvcrt.dll
+	} else {
+	    cffi::Wrapper create crt libc.so.6
+	}
+	crt function strlen size_t {s string}
+	if {[strlen whale] != 5} {error "strlen whale: [strlen whale]"}
+	cffi::prototype function cmp_proto int \
+	    {a {pointer unsafe} b {pointer unsafe}}
+	proc cmpbyte {a b} {
+	    binary scan [cffi::memory tobinary! $a 1] c x
+	    binary scan [cffi::memory tobinary! $b 1] c y
+	    expr {$x - $y}
+	}
+	set cb [cffi::callback new cmp_proto cmpbyte -1]
+	crt function qsort void \
+	    {base {pointer unsafe} n size_t sz size_t f pointer.cmp_proto}
+	set p [cffi::memory frombinary [binary format c* {3 1 4 1 5}]]
+	qsort $p 5 1 $cb
+	binary scan [cffi::memory tobinary $p 5] c* sorted
+	cffi::memory free $p
+	cffi::callback free $cb
+	if {$sorted ne "1 1 3 4 5"} {error "qsort gave: $sorted"}
+	list strlen 5 qsort $sorted
+    }
+} else {
+    say "skip cffi: not compiled in"
+}
+
 if {$tcl_platform(platform) eq "windows"} {
     check registry {
 	load {} Registry

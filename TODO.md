@@ -14,7 +14,9 @@ itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
 packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13),
 Tkhtml (3.0 → 3.0.2, BAWT snapshot), bwidget (1.x → 1.10.1),
 tklib (0.5 → 0.9), awthemes 10.4.0 (replacing the ttk-theme zoo;
-scalable variants incl. — Tk 9 renders svg in the core).
+scalable variants incl. — Tk 9 renders svg in the core), cffi 2.0.3
+(replacing Ffidl 0.6 — same ground, live upstream; libffi 3.7.1
+static on both platforms, tclh submodule pinned as an ingredient).
 
 ## Easy wins — bundled in the Tcl 9 tarball (`source tclpkgs`)
 
@@ -31,9 +33,6 @@ scalable variants incl. — Tk 9 renders svg in the core).
 
 ## C extensions with a live upstream — port next
 
-- **Ffidl** (was 0.6) — superseded by **cffi** (apnadkarni, same
-  author as twapi): active, Tcl 9-ready; port cffi instead. Needs
-  libffi or dyncall — the twapi recipe already links dyncall.
 - **Expect** (was 5.44, unix, gui image only) — upstream near-dead,
   Tcl 9 status doubtful; decide if the niche (pty scripting) is
   still needed.

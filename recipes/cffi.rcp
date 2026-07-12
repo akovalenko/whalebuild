@@ -1,0 +1,63 @@
+# Tcl CFFI 2.0.3 (apnadkarni, same author as twapi): script-level
+# foreign-function calls, superseding the monster era's Ffidl (see
+# TODO.md). Backend is libffi — the configure default, and dyncall
+# can't pass structs by value off x64 anyway.
+#
+# libffi links STATICALLY on BOTH platforms from a pinned ingredient.
+# Unlike OpenSSL there is no stable-ABI system copy to lean on: the
+# soname churned .so.6/.so.7/.so.8 across recent distros (a dynamic
+# whale would demand the builder's exact one), Windows has none at
+# all, and build hosts commonly carry 3.4.2 with the pre-3.4.4
+# stack-corruption bug. Static is also what cffi's configure does by
+# default (--enable-staticffi), appending -DFFI_BUILDING=static
+# itself — ffi.h needs that to drop dllimport on the static link.
+#
+# LIBFFI_CFLAGS is upstream's knob for a non-system ffi.h. Nothing
+# resolves symbols at extension-build time (static archive); the
+# whale's final link takes libffi.a via `libs`.
+#
+# tclh (apnadkarni's Tcl helper library) is a git SUBMODULE, which the
+# tag tarball ships as an empty directory. It is header-only from the
+# build's viewpoint (the *Impl.c files live inside include/ and ride
+# in via TCLH_IMPL in tclCffiTclh.c), so a copy-only ingredient pinned
+# to the commit v2.0.3 references fills the gap through CPPFLAGS.
+version 2.0.3
+source tarball https://github.com/apnadkarni/tcl-cffi/archive/refs/tags/v2.0.3.tar.gz
+ingredient tclh * {
+    source tarball https://github.com/apnadkarni/tclh/archive/6afd30630d13404cfe5ea49de7018f2c30dd9e30.tar.gz
+    build {
+	mkdir @OUT@
+	cp -R include @OUT@/include
+    }
+}
+ingredient libffi-linux linux {
+    source tarball https://github.com/libffi/libffi/releases/download/v3.7.1/libffi-3.7.1.tar.gz
+    build {
+	./configure --disable-shared --disable-docs \
+	    --prefix=@OUT@ --libdir=@OUT@/lib
+	make -j@JOBS@
+	make install
+    }
+}
+ingredient libffi-win64 win64 {
+    source tarball https://github.com/libffi/libffi/releases/download/v3.7.1/libffi-3.7.1.tar.gz
+    build {
+	./configure --host=x86_64-w64-mingw32 --disable-shared --disable-docs \
+	    --prefix=@OUT@ --libdir=@OUT@/lib
+	make -j@JOBS@
+	make install
+    }
+}
+confargs linux {LIBFFI_CFLAGS=-I@CACHE@/libffi-linux/include
+    CPPFLAGS=-I@CACHE@/tclh/include}
+confargs win64 {LIBFFI_CFLAGS=-I@CACHE@/libffi-win64/include
+    CPPFLAGS=-I@CACHE@/tclh/include}
+# tclh's UUID module wants the platform UUID service: libuuid on
+# linux (util-linux; .so.1 ABI stable for decades — system layer,
+# like libc), UuidCreate from rpcrt4 on Windows.
+libs linux {@CACHE@/libffi-linux/lib/libffi.a -luuid}
+libs win64 {@CACHE@/libffi-win64/lib/libffi.a -lrpcrt4}
+pkgindex {
+    package ifneeded cffi 2.0.3 {load {} Cffi}
+}
+init Cffi
