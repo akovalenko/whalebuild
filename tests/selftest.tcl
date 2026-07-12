@@ -258,6 +258,30 @@ if {($tcl_platform(platform) eq "windows"
     } else {
 	say "skip tkdnd: not compiled in"
     }
+    if {![catch {package require BWidget}]} {
+	check bwidget {
+	    ComboBox .cb -values {kit whale}
+	    .cb setvalue @1
+	    set r [list [package present BWidget] [.cb cget -text]]
+	    destroy .cb
+	    set r
+	}
+    } else {
+	say "skip bwidget: not compiled in"
+    }
+    if {![catch {package require ctext}]} {
+	check tklib {
+	    # ctext stands in for the whole script library
+	    ctext .ct -width 20 -height 4
+	    .ct insert end whale
+	    set r [list ctext [package present ctext] \
+		text [string trim [.ct get 1.0 end]]]
+	    destroy .ct
+	    set r
+	}
+    } else {
+	say "skip tklib: not compiled in"
+    }
     if {![catch {package require Tkhtml}]} {
 	check tkhtml {
 	    html .html

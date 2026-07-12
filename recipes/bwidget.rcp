@@ -1,0 +1,14 @@
+# BWidget 1.10.1 (core.tcl-lang.org/bwidget) — the classic pure-Tcl
+# megawidget set, alive on core. Nothing to compile and nothing to
+# `load`: its own pkgIndex.tcl is a self-contained tclPkgSetup that
+# wires lazy sourcing, so the tree is wrapped whole — upstream's index
+# lands in lib/bwidget/pkgIndex.tcl and the package scan uses it
+# as-is (this recipe deliberately has NO pkgindex of its own; the
+# runtime images/ and lang/ resources ride along, docs and demos are
+# pruned).
+version 1.10.1
+source tarball https://core.tcl-lang.org/bwidget/tarball/bwidget-1-10-1/bwidget.tar.gz
+requires tk
+buildstyle none
+vfs {*}
+vfsprune {BWman demo tests ChangeLog CHANGES.txt README.txt}

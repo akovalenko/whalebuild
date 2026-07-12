@@ -1,0 +1,21 @@
+# tklib 0.9 (core.tcl-lang.org/tklib) — tcllib's Tk-side sibling:
+# plotchart, tablelist, ctext, tooltip, scrollutil and ~30 more
+# pure-script widget modules. Same handling as tcllib: wrap the
+# modules whole, prune what never runs (tests, manpages), and let the
+# generated top index source every module's own pkgIndex.tcl with
+# $dir rebound — they sit two levels below the auto_path entry where
+# the package scan does not look.
+version 0.9
+source tarball https://core.tcl-lang.org/tklib/tarball/tklib-0.9/tklib.tar.gz
+requires tk
+buildstyle none
+vfs {modules/*}
+vfsprune {*.test *.man *.bench}
+pkgindex {
+    apply {{dir} {
+	foreach idx [lsort [glob -nocomplain -directory $dir */pkgIndex.tcl]] {
+	    set dir [file dirname $idx]
+	    source -encoding utf-8 $idx
+	}
+    }} $dir
+}

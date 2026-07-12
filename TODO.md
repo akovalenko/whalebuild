@@ -12,7 +12,8 @@ tk, sqlite3, thread, tls, tcllib + tcllibc, treectrl, twapi
 itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
 (1.3 → 2.1.1, all format handlers incl. the four codec support
 packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13),
-Tkhtml (3.0 → 3.0.2, BAWT snapshot).
+Tkhtml (3.0 → 3.0.2, BAWT snapshot), bwidget (1.x → 1.10.1),
+tklib (0.5 → 0.9).
 
 ## Easy wins — bundled in the Tcl 9 tarball (`source tclpkgs`)
 
@@ -22,8 +23,6 @@ Tkhtml (3.0 → 3.0.2, BAWT snapshot).
 
 ## Easy wins — pure script (`buildstyle none` + vfs globs)
 
-- **bwidget** (was 1.x) — plain Tcl, alive on core.tcl-lang.org.
-- **tklib** (was 0.5) — sibling of tcllib, same handling.
 - **ttk themes** (aquativo, black, keramik ×2, plastik, winxpblue) —
   modern equivalent: awthemes / ttk-themes collections, pure script.
 
