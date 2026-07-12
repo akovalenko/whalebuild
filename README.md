@@ -129,9 +129,12 @@ Two build boxes, one per leg, each with its own **persistent** work
 tree bind-mounted over `work/` from outside the container — the build
 cache and incremental rebuilds survive container death:
 
-- `Containerfile.linux` — AlmaLinux 9: the oldest mainstream glibc
-  (2.34) that ships OpenSSL 3, so the dynamically-linked-by-policy
-  whale runs on any distro that has `libssl.so.3` at all.
+- `Containerfile.linux` — Ubuntu 22.04: the oldest mainstream
+  userland whose OpenSSL is the 3.x line — the binary's real floor
+  is the openssl symbol-version tags it links against, so building
+  against 3.0.2 makes the dynamically-linked-by-policy whale run on
+  anything with `libssl.so.3` (newer openssls serve old tags; the
+  reverse fails).
 - `Containerfile.win64` — fresh Arch: rolling mingw-w64. A native
   Tcl 9 tclsh is baked into the image (`WHALEBUILD_NATIVE_TCLSH`) —
   with a separate work per leg the cross build can't borrow it from

@@ -1,41 +1,42 @@
-# Containerfile.linux — build box for the linux whale on AlmaLinux 9:
-# the OLDEST mainstream glibc (2.34) that coexists with OpenSSL 3.
-# The whale links libssl DYNAMICALLY by policy (NOTES.md), so its
-# runtime floor is "any distro with libssl.so.3" — and building
-# against EL9's glibc makes the binary run on every one of them:
-# EL9+, Ubuntu 22.04+ (2.35), Debian 12+ (2.36), Fedora 36+. Distros
-# older than that lack the soname anyway, so nothing is lost by not
-# going older. Toolchain freshness does not matter here (distro
-# gcc 11 is plenty); glibc age does.
+# Containerfile.linux — build box for the linux whale on Ubuntu
+# 22.04: the oldest mainstream userland whose OpenSSL is the 3.x line
+# (3.0.2, soname libssl.so.3) — and being the OLDEST of that line is
+# the point. The whale links libssl DYNAMICALLY by policy (NOTES.md),
+# and the runtime contract is finer than the soname: symbols carry
+# version tags (OPENSSL_3.0.0, _3.2.0, ...), and the binary demands
+# every tag it linked against. Build against 3.0 and it runs on any
+# libssl.so.3 (Ubuntu 22.04+, Debian 12+, EL9, Fedora 36+); build
+# against a newer one and hosts still on 3.0 refuse to load it.
+#
+# That killed the first pick, AlmaLinux 9 (glibc 2.34, a notch older
+# than Ubuntu's 2.35): EL9 point releases REBASE openssl (3.2, then
+# 3.5), so the box quietly minted binaries wanting OPENSSL_3.2.0+ —
+# caught on the first real host. Ubuntu 22.04's openssl stays 3.0
+# for the distro's life; glibc 2.35 as the floor merely drops
+# EL9-family run targets (their glibc is 2.34), which this project
+# doesn't chase. Toolchain freshness does not matter here; userland
+# age does.
 #
 #   podman build -f Containerfile.linux -t whalebuild-linux .
 #   ./cbuild.sh linux -jobs 8         # see cbuild.sh for the runs
 #
 # tcl = the 8.6 host tclsh that runs the driver (the native Tcl 9
-# one is built by the build itself into work/linux/install). EPEL
-# carries p7zip-plugins (the `7z` the driver calls for BAWT-mirrored
-# sources); CRB is enabled for the stray -devel packages EL9 keeps
-# off AppStream. Xvfb + xauth + a real font let `cbuild.sh linux
-# selftest` run the GUI checks headless inside the box. Xcursor
-# headers are for tkdnd (it refuses to configure without them).
+# one is built by the build itself into work/linux/install).
+# p7zip-full is the `7z` the driver calls for BAWT-mirrored sources.
+# zip packs Tk's script-library zip (the no-zip minizip fallback is
+# broken in an installed-tree build). Xcursor headers are for tkdnd.
+# Xvfb + xauth + a real font let `cbuild.sh linux selftest` run the
+# GUI checks headless inside the box.
 
-FROM docker.io/library/almalinux:9
+FROM docker.io/library/ubuntu:22.04
 
-# No `curl` in the list: the base image ships curl-minimal (same
-# /usr/bin/curl, http/https aboard — all the driver needs), and the
-# full package CONFLICTS with it instead of upgrading.
-#
-# `zip` is for the Tk makefile: it packs libtk9.0.4.zip with the
-# system zip when configure finds one, and its no-zip fallback (the
-# minizip tool from the TCL build tree) is broken in an installed-
-# tree build — "No rule to make target 'minizip'".
-RUN dnf -y install epel-release \
-    && dnf -y --enablerepo=crb install \
-        tcl gcc make git tar gzip zip unzip rsync findutils diffutils \
-        p7zip p7zip-plugins \
-        openssl-devel libuuid-devel zlib-devel \
-        libX11-devel libXext-devel libXft-devel libXcursor-devel \
-        xorg-x11-server-Xvfb xorg-x11-xauth dejavu-sans-fonts \
-    && dnf clean all
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        tcl gcc make git curl ca-certificates \
+        tar gzip zip unzip rsync p7zip-full \
+        libssl-dev uuid-dev zlib1g-dev \
+        libx11-dev libxext-dev libxft-dev libxcursor-dev \
+        xvfb xauth fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /w
