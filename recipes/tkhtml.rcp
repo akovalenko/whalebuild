@@ -21,13 +21,14 @@
 # come back zero-extended), and the only fresh-gcc error class in
 # the tree (probed with -Werror=implicit-function-declaration,
 # int-conversion, implicit-int too) — so it is waved through, not
-# fixed: the snapshot is pinned and patch-free by policy. -pipe
-# restores TEA's default user CFLAGS the override displaces.
+# fixed: the snapshot is pinned and patch-free by policy. (TEA
+# PREPENDS user CFLAGS to its own defaults — -pipe and the -O level
+# survive, verified in the generated Makefile.)
 version 3.0.2
 source 7z https://bawt.tcl3d.org/download/InputLibs/Tkhtml-3.0.2.7z
 requires tk
 maketarget binaries
-confargs {{CFLAGS=-pipe -Wno-error=incompatible-pointer-types}}
+confargs {CFLAGS=-Wno-error=incompatible-pointer-types}
 postconf win64 {sed -i -e 's|^TCLSH_PROG.*|TCLSH_PROG = @NATIVE@|' \
     -e 's/-O2/-O1/g' Makefile}
 init Tkhtml Tkhtml_SafeInit
