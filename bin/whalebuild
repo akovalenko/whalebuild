@@ -600,7 +600,7 @@ proc PruneTree {dir patterns} {
 }
 
 proc Image {exts bare out appdir} {
-    global P
+    global P Root
     set vfs [file join [dict get $P work] vfs]
     set log [file join [dict get $P logs] image.log]
     file delete -force $vfs
@@ -636,6 +636,28 @@ proc Image {exts bare out appdir} {
 	}
 	if {[llength [R $name vfsprune]]} {
 	    PruneTree $dir [R $name vfsprune]
+	}
+    }
+
+    # Third-party notices for binary redistribution (BSD notice
+    # clauses; Apache-2.0 NOTICE once OpenSSL is linked statically):
+    # every battery's license file(s) ride in the image under
+    # lib/<name>/, an ingredient's under lib/<consumer>/<ingredient>-*.
+    foreach name [concat tcl $exts] {
+	set dir [file join $vfs lib $name]
+	foreach f [glob -nocomplain -directory [SrcDir $name] \
+		license.terms LICENSE LICENSE.* COPYING COPYING.* UNLICENSE] {
+	    file mkdir $dir
+	    file copy -force $f [file join $dir [file tail $f]]
+	}
+	dict for {ing pspec} [R $name ingredients] {
+	    if {[lindex $pspec 0] ni [list * [dict get $P name]]} continue
+	    foreach f [glob -nocomplain -directory \
+		    [file join $Root work cache $ing.src] \
+		    license.terms LICENSE LICENSE.* COPYING COPYING.*] {
+		file mkdir $dir
+		file copy -force $f [file join $dir $ing-[file tail $f]]
+	    }
 	}
     }
 

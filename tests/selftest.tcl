@@ -37,6 +37,59 @@ check thread {
 
 if {![catch {package require tls}]} {
     check tls {tls::version}
+    # Loopback handshake — deliberately NO egress: a thread serves TLS
+    # on 127.0.0.1 with the long-lived self-signed pair
+    # tests/loopback.pem, the client verifies it via -cafile and
+    # echoes a line. The negative leg drops -cafile: the DEFAULT store
+    # (system CAs on unix, org.openssl.winstore:// on Windows) must
+    # reject a self-signed cert — proving verification is really on.
+    set pem [file join [file dirname [info script]] loopback.pem]
+    if {[catch {package require thread}] || ![file exists $pem]} {
+	say "skip tls-loopback: needs the thread battery and tests/loopback.pem"
+    } else {
+	set tid [thread::create]
+	# a fresh thread's interp has the default auto_path, without the
+	# image's lib/ — hand ours over so `package require tls` resolves
+	thread::send $tid [list set auto_path $auto_path]
+	thread::send $tid [list set pem $pem]
+	set port [thread::send $tid {
+	    package require tls
+	    proc accept {ch args} {
+		fconfigure $ch -blocking 0 -buffering line
+		fileevent $ch readable [list echo $ch]
+	    }
+	    proc echo {ch} {
+		if {[catch {gets $ch line} n] || [eof $ch]} {
+		    catch {close $ch}
+		    return
+		}
+		if {$n >= 0} {puts $ch "echo:$line"}
+	    }
+	    set srv [tls::socket -server accept \
+		-certfile $pem -keyfile $pem 0]
+	    lindex [fconfigure $srv -sockname] 2
+	}]
+	check tls-loopback {
+	    set so [tls::socket -cafile $::pem -servername localhost \
+		127.0.0.1 $::port]
+	    tls::handshake $so
+	    fconfigure $so -buffering line
+	    puts $so whale
+	    set r [gets $so]
+	    close $so
+	    set r
+	}
+	check tls-verify-negative {
+	    set r [catch {
+		set so [tls::socket -servername localhost 127.0.0.1 $::port]
+		tls::handshake $so
+	    }]
+	    catch {close $so}
+	    if {!$r} {error "self-signed accepted by the default store"}
+	    set r "self-signed rejected without -cafile"
+	}
+	thread::release $tid
+    }
 } else {
     say "skip tls: not compiled in"
 }
