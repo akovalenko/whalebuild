@@ -1,0 +1,16 @@
+# TDBC base (Tcl DataBase Connectivity), bundled in the Tcl source
+# tarball (pkgs/): a small C part (SQL tokenizer et al.) plus TclOO
+# base classes in tdbc.tcl. Drivers are separate packages — the kit
+# carries tdbc::sqlite3 (pure Tcl); tdbcmysql/odbc/postgres are left
+# out on purpose, they need external client libraries.
+version 1.1.13
+source tclpkgs tdbc1.1.13
+init Tdbc
+vfs {library/tdbc.tcl}
+pkgindex {
+    package ifneeded tdbc 1.1.13 [list ::apply {{dir} {
+	package require TclOO
+	load {} Tdbc
+	source -encoding utf-8 [file join $dir tdbc.tcl]
+    }} $dir]
+}

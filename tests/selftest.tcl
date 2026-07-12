@@ -17,6 +17,14 @@ proc check {label script} {
 say "whale: Tcl [info patchlevel], exe=[file tail [info nameofexecutable]]"
 say "tcl_library: $tcl_library"
 
+# The whale is self-contained — test the image, not the workshop: on
+# the build host the exe's baked-in install prefix puts
+# work/<platform>/install/lib on auto_path, and the DYNAMIC builds of
+# the bundled packages living there would silently shadow the static
+# batteries under test (caught 2026-07-12: "ok itcl" was the install
+# tree's itcl.so, while the battery's pkgindex panicked).
+set auto_path [lsearch -all -inline $auto_path //zipfs:*]
+
 check sqlite3 {
     package require sqlite3
     sqlite3 db :memory:
@@ -102,6 +110,38 @@ if {![catch {package require tcllibc}]} {
     }
 } else {
     say "skip tcllibc: not compiled in"
+}
+
+if {![catch {package require itcl}]} {
+    check itcl {
+	itcl::class Counter {
+	    variable n 0
+	    method bump {} {incr n}
+	}
+	Counter c
+	c bump
+	c bump
+	set r [c bump]
+	itcl::delete class Counter
+	set r
+    }
+} else {
+    say "skip itcl: not compiled in"
+}
+
+if {![catch {package require tdbc::sqlite3}]} {
+    check tdbc-sqlite3 {
+	tdbc::sqlite3::connection create tconn :memory:
+	set stmt [tconn prepare {SELECT :a + :b AS s}]
+	set rs [$stmt execute {a 2 b 40}]
+	$rs nextdict row
+	$rs close
+	$stmt close
+	tconn close
+	dict get $row s
+    }
+} else {
+    say "skip tdbc::sqlite3: not compiled in"
 }
 
 if {![catch {package require nostr}]} {

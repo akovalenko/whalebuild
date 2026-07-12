@@ -1,0 +1,13 @@
+# TDBC driver for SQLite3, bundled in the Tcl source tarball (pkgs/).
+# Pure Tcl — a TclOO wrapper over the sqlite3 command, nothing to
+# compile or link; the recipe only ships the script and its pkgindex.
+version 1.1.13
+source tclpkgs tdbcsqlite3-1.1.13
+buildstyle none
+requires {tdbc sqlite3}
+vfs {library/tdbcsqlite3.tcl}
+pkgindex {
+    package ifneeded tdbc::sqlite3 1.1.13 [list ::apply {{dir} {
+	source -encoding utf-8 [file join $dir tdbcsqlite3.tcl]
+    }} $dir]
+}

@@ -448,9 +448,12 @@ proc ExtLib {name} {
     if {[R $name buildstyle] eq "critcl"} {
 	return [file join [dict get $P builds] $name lib$name.a]
     }
-    set a [Glob1 -directory [SrcDir $name] *.a]
-    if {$a eq ""} {die "no static library found for $name"}
-    return $a
+    # TEA packages with a stubs API (itcl, tdbc) ship two archives —
+    # skip the stub one: it has no <Pkg>_Init and strands the linker.
+    foreach a [lsort [glob -nocomplain -directory [SrcDir $name] *.a]] {
+	if {![string match *stub* [file tail $a]]} {return $a}
+    }
+    die "no static library found for $name"
 }
 
 proc ProbeTcl9 {sh} {

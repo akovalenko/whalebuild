@@ -1,0 +1,21 @@
+# incr Tcl, bundled in the Tcl source tarball (pkgs/). The C part
+# sources itcl.tcl at init time; the image dir is handed over via
+# ITCL_LIBRARY (second stop of its _find_init search). Do NOT pass it
+# by pre-creating ::itcl with the library variable — Itcl_Init
+# Tcl_Panics when the namespace already exists.
+version 4.3.8
+source tclpkgs itcl4.3.8
+init Itcl Itcl_SafeInit
+vfs {library/*.tcl}
+vfsprune {test_*}
+pkgindex {
+    package ifneeded itcl 4.3.8 [list ::apply {{dir} {
+	set ::env(ITCL_LIBRARY) $dir
+	try {
+	    load {} Itcl
+	} finally {
+	    unset -nocomplain ::env(ITCL_LIBRARY)
+	}
+    }} $dir]
+    package ifneeded Itcl 4.3.8 {package require -exact itcl 4.3.8}
+}
