@@ -234,7 +234,7 @@ if {![catch {package require nostr}]} {
 		    || ![llength [info procs ::nostr::relay::connect]]} {
 		error "relay layer did not define its commands"
 	    }
-	    return "nostr::relay loaded"
+	    set _ "connect/publish/subscribe/dm defined"
 	}
     } else {
 	say "skip nostr::relay: not shipped"
