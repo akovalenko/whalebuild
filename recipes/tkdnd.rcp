@@ -1,0 +1,46 @@
+# TkDND 2.9.5 (petasis/tkdnd) — native drag & drop (XDND on X11, OLE
+# on Windows). Straight TEA off git master (CI runs Tcl/Tk 9 there);
+# BAWT builds it equally stock on gcc, its patches are macOS-only.
+# Platform legs: linux needs libXcursor (hard configure requirement);
+# on Windows configure compiles EVERYTHING as C++ (CC=$CXX), so the
+# whale link needs the OLE import libs plus a STATIC C++ runtime —
+# -l: forces the .a over the import lib, keeping the exe single-file.
+#
+# The static pkgindex is trickier than most: upstream's index sources
+# tkdnd.tcl and calls tkdnd::initialise, whose tail hardcodes
+# `load $dir/$PKG_LIB_FILE` — a shared-lib path that does not exist in
+# a whale. Reimplementing initialise here would fork real logic (temp
+# dir discovery, platform script dispatch), so instead ::load is
+# shadowed for exactly that one call and redirected to the static
+# package. Upstream's TKDND_DEBUG_LEVEL source-filter gimmick is
+# dropped — tkdnd::source below is the plain one it falls back to.
+version 2.9.5
+source git https://github.com/petasis/tkdnd
+requires tk
+init Tkdnd Tkdnd_SafeInit
+libs linux {-lXcursor}
+libs win64 {-lole32 -loleaut32 -luuid -lshell32
+    -l:libstdc++.a -l:libgcc_eh.a}
+vfs {library/*.tcl}
+pkgindex {
+    package ifneeded tkdnd 2.9.5 [list ::apply {{dir} {
+	namespace eval ::tkdnd {
+	    proc source {filename {encoding utf-8}} {
+		::source -encoding $encoding $filename
+	    }
+	}
+	tkdnd::source [file join $dir tkdnd.tcl]
+	rename ::load ::tkdnd_shadowed_load
+	proc ::load {args} {::tkdnd_shadowed_load {} Tkdnd}
+	try {
+	    tkdnd::initialise $dir {} tkdnd
+	} finally {
+	    rename ::load {}
+	    rename ::tkdnd_shadowed_load ::load
+	}
+    }} $dir]
+    package ifneeded tkdnd::utils 2.9.5 [list ::apply {{dir} {
+	source -encoding utf-8 [file join $dir tkdnd_utils.tcl]
+	package provide tkdnd::utils 2.9.5
+    }} $dir]
+}

@@ -127,9 +127,9 @@ Testing win64 output needs wine; GUI self-test uses Xvfb if present.
 
 Working proof of concept grown out of a live experiment (2026-07); the
 default battery set (tk, treectrl, sqlite3, thread, tcllib, tls, itcl,
-tdbc + tdbc::sqlite3, tdom, tkimg/Img, plus tcllibc on Linux, twapi on
-Windows) builds and self-tests on both platforms (tls on win64 =
-static OpenSSL, verified under wine incl. winstore certificate
+tdbc + tdbc::sqlite3, tdom, tkimg/Img, tkdnd, plus tcllibc on Linux,
+twapi on Windows) builds and self-tests on both platforms (tls on
+win64 = static OpenSSL, verified under wine incl. winstore certificate
 verification). Interfaces (recipe fields, CLI) may change.
 
 ## License

@@ -222,6 +222,20 @@ if {($tcl_platform(platform) eq "windows"
 	destroy .t   ;# NOT `destroy .` — that kills Tk for later checks
 	set r
     }
+    if {![catch {package require tkdnd}]} {
+	check tkdnd {
+	    # registering really talks to the platform (XdndAware
+	    # property / OLE RegisterDragDrop), not just script glue
+	    label .dndprobe
+	    tkdnd::drop_target register .dndprobe DND_Text
+	    set types [bind .dndprobe <<DropTargetTypes>>]
+	    tkdnd::drop_target unregister .dndprobe
+	    destroy .dndprobe
+	    list [package present tkdnd] types $types
+	}
+    } else {
+	say "skip tkdnd: not compiled in"
+    }
     if {![catch {package require img::jpeg}]} {
 	check tkimg {
 	    # jpeg and tiff live outside the Tk core (unlike png/gif),
