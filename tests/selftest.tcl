@@ -182,6 +182,28 @@ if {![catch {package require nostr}]} {
     say "skip nostr: not compiled in"
 }
 
+if {![catch {package require udp}]} {
+    check udp {
+	set srv [udp_open]
+	set port [fconfigure $srv -myport]
+	fconfigure $srv -buffering none -translation binary -blocking 0
+	set cli [udp_open]
+	fconfigure $cli -buffering none -translation binary \
+	    -remote [list 127.0.0.1 $port]
+	fileevent $srv readable [list set ::udpgot data]
+	after 3000 [list set ::udpgot timeout]
+	puts -nonewline $cli whale-dgram
+	vwait ::udpgot
+	set r [read $srv]
+	close $cli
+	close $srv
+	if {$::udpgot eq "timeout"} {error "datagram never arrived"}
+	set r
+    }
+} else {
+    say "skip udp: not compiled in"
+}
+
 if {$tcl_platform(platform) eq "windows"} {
     check registry {
 	load {} Registry

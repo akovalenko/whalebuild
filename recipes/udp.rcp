@@ -1,0 +1,26 @@
+# tcludp 1.0.13 (core.tcl-lang.org/tcludp) — UDP sockets: unicast,
+# broadcast, multicast. Small straight-TEA extension, Tcl 9-ready
+# upstream (the 9-vs-8 split lives in its pkgIndex, moot here). Its
+# fossil hides tarballs behind a login, so the pinned source is
+# BAWT's 7z mirror — the reason the `7z` source kind exists. The doc
+# target wants dtplite (same story as tls) — build binaries only.
+# No script part: the optional initScript upstream sources does not
+# exist in the tree.
+version 1.0.13
+source 7z https://bawt.tcl3d.org/download/InputLibs/udp-1.0.13.7z
+maketarget binaries
+init Udp Udp_SafeInit
+# Two CFLAGS knobs, both encoded as -D:
+# - BuildInfoCommand: udp and tls each copied TEA's sample `build-info`
+#   helper as a GLOBAL — two batteries, one exe, multiple definition.
+#   (Linux never noticed only because tcllibc's ldextra
+#   --allow-multiple-definition masks the whole link.) Renamed here.
+# - _WIN32_WINNT=0x0600: mingw-w64 gates AI_V4MAPPED/AI_ALL/
+#   AI_ADDRCONFIG and inet_pton behind Vista and defaults lower;
+#   Tcl 9 itself is Vista+ anyway.
+confargs linux {{CFLAGS=-DBuildInfoCommand=UdpBuildInfoCommand}}
+confargs win64 {{CFLAGS=-DBuildInfoCommand=UdpBuildInfoCommand -D_WIN32_WINNT=0x0600}}
+libs win64 {-lws2_32}
+pkgindex {
+    package ifneeded udp 1.0.13 {load {} Udp}
+}

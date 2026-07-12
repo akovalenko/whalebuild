@@ -11,7 +11,7 @@ tk, sqlite3, thread, tls, tcllib + tcllibc, treectrl, twapi
 (3.0.0 → 5.x), Registry/Dde (folded into the static core),
 itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
 (1.3 → 2.1.1, all format handlers incl. the four codec support
-packages), tkdnd (1.0 → 2.9.5).
+packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13).
 
 ## Easy wins — bundled in the Tcl 9 tarball (`source tclpkgs`)
 
@@ -28,7 +28,6 @@ packages), tkdnd (1.0 → 2.9.5).
 
 ## C extensions with a live upstream — port next
 
-- **udp (tcludp)** (was 1.0.9) — small TEA extension; check Tcl 9.
 - **Ffidl** (was 0.6) — superseded by **cffi** (apnadkarni, same
   author as twapi): active, Tcl 9-ready; port cffi instead. Needs
   libffi or dyncall — the twapi recipe already links dyncall.
