@@ -62,6 +62,23 @@ bin/whalebuild build -app myapp/ -out myapp.bin
 ./work/linux/whale tests/selftest.tcl
 ```
 
+## Kits (the starkit workflow on zipfs)
+
+A *kit* is a plain zip with `main.tcl` at its root (and, optionally, a
+`lib/` with packages) — any whale runs it directly, sdx-style:
+
+```sh
+bin/whalebuild wrap myapp/ myapp.kit      # sdx wrap analog (zipfs mkzip)
+./work/linux/whale myapp.kit args...      # mounts on //zipfs:/kit, runs main.tcl
+bin/whalebuild wrap -exec myapp/ myapp.kit  # + shebang, ./myapp.kit runs
+unzip -l myapp.kit                        # sdx unwrap/ls analog: it is a zip
+```
+
+`-exec` prepends `#!/usr/bin/env whale` (zip readers ignore prefix
+data) and marks the file executable. For a standalone single-file
+application use `build -app dir -out file` instead — that bakes the
+app into the whale itself.
+
 ## Recipes
 
 One file per extension under `recipes/`, in the spirit of BAWT (which we

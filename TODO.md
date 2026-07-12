@@ -45,19 +45,32 @@ tk, sqlite3, thread, tls, tcllib + tcllibc, treectrl, twapi
   replacement.
 - **tktray** (was 1.3.8, X11) — system tray; on Windows the old
   Winico role is covered by twapi. Check freedesktop-era relevance.
-- **Tkhtml** (was 3.0) — upstream dead; forks exist (hv3). Decide
-  whether an HTML widget is still wanted.
+- **Tkhtml** (was 3.0) — upstream dead, but BAWT ships a maintained
+  snapshot (`Tkhtml-3.0.2.7z` at bawt.tcl3d.org, base
+  github.com/olebole/tkhtml3): TEA bumped to 3.9 and `Tcl_Size`
+  touches present (Tcl 9-shaped), gcc-only on Windows, needs
+  permissive CFLAGS plus a -O2→-O1 workaround for 64-bit mingw
+  (BAWT's recipe notes a codegen bug). Recipe path: `source git`
+  olebole/tkhtml3 if it carries the same fixes, else vendor the
+  BAWT snapshot (needs a 7z/plain-dir source kind in the driver).
 
 ## Superseded — do not port, note the replacement
 
-- **Mk4tcl / Metakit** → sqlite3 (long dead upstream).
+- **Mk4tcl / Metakit** → sqlite3 for data (long dead upstream). The
+  mk4 FORMAT still lives, though: KitCreator (rkeene) maintains Tcl 9
+  ports of tclvfs 1.4.1 + `vfs::mk4` over vlerq/mklite — seen live
+  inside the tclkit-9.0.3 fleet. If reading old mk4 kits ever
+  matters, port from KitCreator, not from the dead upstreams.
 - **Memchan** → core reflected channels (`chan create`) + `tcl::chan::*`
   in tcllib.
-- **tclvfs** (+ tclvfs4sqlite) → core zipfs for image needs; the
+- **tclvfs** (+ tclvfs4sqlite) → core zipfs for image needs (but see
+  the Mk4tcl entry: a Tcl 9 port exists in KitCreator); the
   sqlite-vfs trick may deserve a fresh look someday.
 - **Iocpsock** (win) → obsolete, core winsock got rewritten.
 - **Winico / shellicon** (win) → twapi (systray, shell icons).
-- **sdx / starkit tooling** → whalebuild itself + core zipfs.
+- **sdx / starkit tooling** → native now: whales run zip kits
+  (`whale app.kit`, mounted on //zipfs:/kit) and `whalebuild wrap`
+  replaces `sdx wrap`; unwrap/ls is plain `unzip`.
 - **tclhttpd** (was 3.4.3) — era piece; modern choice would be
   wapp/naviserver territory. Only port on concrete need.
 

@@ -39,6 +39,63 @@ extern Tcl_LibraryInitProc Dde_SafeInit;
 
 @EXTERNS@
 
+/*
+ * Starkit-style kits on core zipfs: when the startup script is really
+ * a zip archive with main.tcl at its root, mount it on //zipfs:/kit
+ * and run that instead ("whale app.kit"). The core's own argv[1]
+ * handling for this sits behind SUPPORT_BUILTIN_ZIP_INSTALL, which is
+ * an #error stub in 9.0.4 — so the whale does it itself.
+ */
+static const char whaleKitBootScript[] =
+    "namespace eval ::whale {}\n"
+    "proc ::whale::KitBoot {path} {\n"
+    "    if {[string match //zipfs:/* $path]} {return {}}\n"
+    "    if {![file isfile $path]} {return {}}\n"
+    "    if {[catch {zipfs mount $path //zipfs:/kit}]} {return {}}\n"
+    "    if {![file exists //zipfs:/kit/main.tcl]} {\n"
+    "        catch {zipfs unmount //zipfs:/kit}\n"
+    "        return {}\n"
+    "    }\n"
+    "    if {[file isdirectory //zipfs:/kit/lib]} {\n"
+    "        lappend ::auto_path //zipfs:/kit/lib\n"
+    "    }\n"
+    "    return //zipfs:/kit/main.tcl\n"
+    "}\n";
+
+static void
+Whale_KitBoot(
+    Tcl_Interp *interp)
+{
+    Tcl_Obj *scriptObj = Tcl_GetStartupScript(NULL);
+    Tcl_Obj *cmd;
+    int code;
+
+    if (scriptObj == NULL) {
+	return;
+    }
+    if (Tcl_EvalEx(interp, whaleKitBootScript, -1, TCL_EVAL_GLOBAL)
+	    != TCL_OK) {
+	return;
+    }
+    cmd = Tcl_NewListObj(0, NULL);
+    Tcl_ListObjAppendElement(NULL, cmd,
+	    Tcl_NewStringObj("::whale::KitBoot", -1));
+    Tcl_ListObjAppendElement(NULL, cmd, scriptObj);
+    Tcl_IncrRefCount(cmd);
+    code = Tcl_EvalObjEx(interp, cmd, TCL_EVAL_GLOBAL);
+    Tcl_DecrRefCount(cmd);
+    if (code == TCL_OK) {
+	Tcl_Obj *mainObj = Tcl_GetObjResult(interp);
+	Tcl_Size len;
+
+	(void)Tcl_GetStringFromObj(mainObj, &len);
+	if (len > 0) {
+	    Tcl_SetStartupScript(mainObj, NULL);
+	}
+    }
+    Tcl_ResetResult(interp);
+}
+
 static int
 Whale_AppInit(
     Tcl_Interp *interp)
@@ -57,6 +114,8 @@ Whale_AppInit(
 	    "if {[file isdirectory //zipfs:/app/lib]} {"
 	    " lappend auto_path //zipfs:/app/lib }",
 	    -1, TCL_EVAL_GLOBAL);
+
+    Whale_KitBoot(interp);
 
 #ifdef WHALE_GUI
     /*

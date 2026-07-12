@@ -541,6 +541,59 @@ proc Image {exts bare out appdir} {
     file attributes $out -permissions 0o755
 }
 
+# ---------------------------------------------------------------- wrap --
+
+proc WrapCmd {argv} {
+    # sdx-wrap analog on core zipfs: pack an app dir (main.tcl at its
+    # root, optional lib/) into a zip kit runnable as `whale app.kit`.
+    # -exec prepends a shebang and marks the kit executable (zip
+    # readers ignore prefix data), so `./app.kit` works on unix with a
+    # whale in PATH. For a standalone single-file app use
+    # `whalebuild build -app dir -out file` instead.
+    global Root Native
+    set Native {}
+    if {[info exists ::env(WHALEBUILD_NATIVE_TCLSH)]} {
+	set Native $::env(WHALEBUILD_NATIVE_TCLSH)
+    }
+    set exec 0
+    set paths {}
+    for {set i 0} {$i < [llength $argv]} {incr i} {
+	set opt [lindex $argv $i]
+	switch -- $opt {
+	    -exec   {set exec 1}
+	    -native {
+		if {[incr i] >= [llength $argv]} {die "-native needs a value"}
+		set Native [file normalize [lindex $argv $i]]
+	    }
+	    default {lappend paths $opt}
+	}
+    }
+    if {[llength $paths] != 2} {die "usage: whalebuild wrap ?-exec? appdir out.kit"}
+    lassign $paths indir out
+    set indir [file normalize $indir]
+    set out [file normalize $out]
+    if {![file exists [file join $indir main.tcl]]} {
+	die "wrap: $indir must contain main.tcl"
+    }
+    set log [file join $Root work cache logs wrap.log]
+    msg "wrap [file tail $indir] -> [file tail $out]"
+    if {$exec} {
+	set hdr $out.hdr
+	set f [open $hdr w]
+	puts $f "#!/usr/bin/env whale"
+	close $f
+	set script [list zipfs mkimg $out $indir $indir {} $hdr]
+    } else {
+	set script [list zipfs mkzip $out $indir $indir]
+    }
+    Run $log [NativeTclsh] << $script\n
+    if {$exec} {
+	file delete $out.hdr
+	file attributes $out -permissions 0o755
+    }
+    msg "done: $out"
+}
+
 # ---------------------------------------------------------------- main --
 
 proc Profile {platform} {
@@ -695,10 +748,14 @@ proc BuildCmd {argv} {
     msg "done: $out"
 }
 
-if {[llength $argv] == 0 || [lindex $argv 0] ni {build}} {
-    puts stderr "usage: whalebuild build ?-platform linux|win64?\
-	?-flavor all|cli? ?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file?\
-	?-jobs N? ?-native tclsh9? ?-update?"
-    exit 2
+switch -- [lindex $argv 0] {
+    build {BuildCmd [lrange $argv 1 end]}
+    wrap  {WrapCmd [lrange $argv 1 end]}
+    default {
+	puts stderr "usage: whalebuild build ?-platform linux|win64?\
+	    ?-flavor all|cli? ?-pkgs {tk sqlite3 ...}? ?-app dir? ?-out file?\
+	    ?-jobs N? ?-native tclsh9? ?-update?\n\
+	    \ \ \ whalebuild wrap ?-exec? ?-native tclsh9? appdir out.kit"
+	exit 2
+    }
 }
-BuildCmd [lrange $argv 1 end]

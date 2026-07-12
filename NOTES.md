@@ -32,6 +32,19 @@ recipes and the driver encode these so users don't have to.
   driver therefore runs extension sub-makes first, then a fresh link
   step. Build trees under `work/` keep their objects: one-line C change →
   one recompile + relink + re-image, seconds.
+- **Kits: starkit UX on core zipfs.** `whale app.kit` works because
+  appinit probes the startup script with `zipfs mount`: a zip with
+  `main.tcl` at its root gets mounted on `//zipfs:/kit`, `lib/` joins
+  `auto_path`, and the startup script is redirected via
+  `Tcl_SetStartupScript`. This can't be done from script level (no
+  Tcl-level startup-script setter), and the core's own argv[1] kit
+  logic hides behind `SUPPORT_BUILTIN_ZIP_INSTALL` — an `#error` stub
+  in 9.0.4. The probe is skipped for `//zipfs:/*` startup scripts, so
+  an embedded `-app` whale never eats its first argument. Wrapping is
+  `zipfs mkzip` (`whalebuild wrap`); `-exec` prepends a shebang via
+  `zipfs mkimg`'s infile parameter. Old mk4-format kits are NOT
+  readable (see TODO.md — KitCreator keeps tclvfs/vfs::mk4 alive on
+  Tcl 9 if that compat is ever wanted).
 - **Fetch is a no-op once sources exist; `-update` opts into following
   upstream.** It pulls git caches (`git pull --ff-only`; tarballs are
   pinned by the recipe URL — bump the version and clean the cache to
