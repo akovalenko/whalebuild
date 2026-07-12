@@ -144,6 +144,29 @@ if {![catch {package require tdbc::sqlite3}]} {
     say "skip tdbc::sqlite3: not compiled in"
 }
 
+if {![catch {package require tdom}]} {
+    check tdom {
+	set doc [dom parse {<batteries kind="static">
+	    <b>tdom</b><b>whale</b></batteries>}]
+	set root [$doc documentElement]
+	set n [llength [$root selectNodes //b]]
+	set first [$root selectNodes {string(//b[1])}]
+	$doc delete
+	set xslt [dom parse {<xsl:stylesheet version="1.0"
+		xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+	    <xsl:output method="text"/>
+	    <xsl:template match="/">v=<xsl:value-of select="//v"/></xsl:template>
+	</xsl:stylesheet>}]
+	set src [dom parse <r><v>42</v></r>]
+	$src xslt $xslt out
+	set r [list count $n first $first xslt [string trim [$out asText]]]
+	foreach d [list $xslt $src $out] {$d delete}
+	set r
+    }
+} else {
+    say "skip tdom: not compiled in"
+}
+
 if {![catch {package require nostr}]} {
     check nostr {
 	set sec [string repeat 0 63]3    ;# BIP-340 test vector 0 key

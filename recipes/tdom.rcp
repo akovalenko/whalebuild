@@ -1,0 +1,17 @@
+# tDOM 0.9.6 (tdom.org) — XML parser plus DOM, XPath, XSLT, schema
+# validation. Straight TEA, Tcl 9 supported upstream since 0.9.4; the
+# configure defaults are exactly right for a whale: the bundled expat
+# is compiled into the extension archive (no system expat dependency),
+# html5/gumbo stays off. `make` is safe whole (doc target is empty).
+# Load-time side effect to know about: Tdom_Init renames `unknown` and
+# chains its own version (dom method dispatch) — upstream behavior.
+version 0.9.6
+source tarball http://tdom.org/downloads/tdom-0.9.6-src.tgz
+init Tdom Tdom_SafeInit
+vfs {lib/tdom.tcl}
+pkgindex {
+    package ifneeded tdom 0.9.6 [list ::apply {{dir} {
+	load {} Tdom
+	source -encoding utf-8 [file join $dir tdom.tcl]
+    }} $dir]
+}
