@@ -1,0 +1,28 @@
+--- a/generic/udp_tcl.c
++++ b/generic/udp_tcl.c
+@@ -1050,15 +1050,22 @@
+ 	packets->actual_size = bufSize;
+     }
+     memcpy(buf, packets->message, packets->actual_size);
+-    /* VERY TRICKY: add null-terminating byte, we reserved MAXBUFFERSIZE+1 */
+-    if (packets->actual_size <= bufSize) {
++    /* buf is Tcl's channel buffer of capacity bufSize - the "+1
++     * reserved" only ever applied to this extension's own receive
++     * buffer, so terminate only when the byte fits. */
++    if (packets->actual_size < bufSize) {
+ 	buf[packets->actual_size] = '\0';
+     }
+     Tcl_Free((char *) packets->message);
+     UDPTRACE("udp_recv message with %d bytes", packets->actual_size);
+ 
+     bufSize = packets->actual_size;
+-    strncpy(statePtr->peerhost, packets->r_host, NI_MAXHOST);
++    /* NI_MAXHOST (1025) overruns peerhost[256] - and strncpy pads
++     * with zeros up to n, so this scribbled ~770 zero bytes past
++     * the end of the UdpState allocation on every received packet. */
++    strncpy(statePtr->peerhost, packets->r_host,
++	    sizeof(statePtr->peerhost) - 1);
++    statePtr->peerhost[sizeof(statePtr->peerhost) - 1] = '\0';
+     statePtr->peerport = packets->r_port;
+     statePtr->packets = packets->next;
+     Tcl_Free((char *) packets);
