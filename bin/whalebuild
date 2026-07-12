@@ -180,6 +180,7 @@ proc FetchCache {name} {
 	    set ::Pulled($dst) 1
 	    msg "update $name (git pull)"
 	    RunIn $dst $log git pull --ff-only
+	    RunIn $dst $log git submodule update --init --recursive
 	}
 	return $dst
     }
@@ -191,7 +192,8 @@ proc FetchCache {name} {
 	git {
 	    msg "fetch $name (git clone)"
 	    file mkdir [file dirname $dst]
-	    Run $log git clone --depth 1 [lindex $src 1] $dst
+	    Run $log git clone --depth 1 --recurse-submodules \
+		--shallow-submodules [lindex $src 1] $dst
 	}
 	default {die "recipe $name: unknown source kind '[lindex $src 0]'"}
     }

@@ -1,0 +1,14 @@
+# tclnostr (github.com/akovalenko/tclnostr) — NIP-01 Nostr
+# signer/verifier on libsecp256k1 (BIP-340 Schnorr) + NIP-19 npub/nsec
+# codec. The configure is a hand-rolled TEA-compatible script;
+# libsecp256k1 rides as a git submodule (the driver clones recipes
+# with --recurse-submodules for exactly this) and is compiled WITHOUT
+# its build system straight into libnostr.a. maketarget picks the
+# static lib alone — the default `all` would also build the dev .so.
+# Windows entropy comes from BCryptGenRandom, hence bcrypt in libs.
+version 0.1
+source git https://github.com/akovalenko/tclnostr
+maketarget libnostr.a
+init Nostr
+libs win64 {-lbcrypt}
+pkgindex {package ifneeded nostr 0.1 {load {} Nostr}}

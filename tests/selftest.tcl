@@ -51,6 +51,21 @@ if {![catch {package require tcllibc}]} {
     say "skip tcllibc: not compiled in"
 }
 
+if {![catch {package require nostr}]} {
+    check nostr {
+	set sec [string repeat 0 63]3    ;# BIP-340 test vector 0 key
+	set ev [nostr::sign -sec $sec -kind 1 -content whale \
+	    -created-at 1700000000]
+	if {![nostr::verify $ev]} {error "verify failed"}
+	if {[nostr::verify [string map {whale whal3} $ev]]} {
+	    error "tampering not caught"
+	}
+	list npub [string range [nostr::pubkey $sec] 0 9]… sign+verify ok
+    }
+} else {
+    say "skip nostr: not compiled in"
+}
+
 if {$tcl_platform(platform) eq "windows"} {
     check registry {
 	load {} Registry
