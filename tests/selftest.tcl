@@ -213,7 +213,31 @@ if {![catch {package require nostr}]} {
 	if {[nostr::verify [string map {whale whal3} $ev]]} {
 	    error "tampering not caught"
 	}
-	list npub [string range [nostr::pubkey $sec] 0 9]… sign+verify ok
+	# NIP-44 v2 + NIP-59 gift wrap (the NIP-17 DM crypto)
+	set bob [string repeat 0 63]5
+	set bpub [nostr::pubkey -hex $bob]
+	if {[nostr::nip44 decrypt -sec $bob -pub [nostr::pubkey -hex $sec] \
+		[nostr::nip44 encrypt -sec $sec -pub $bpub "gm ⚡"]] ne "gm ⚡"} {
+	    error "nip44 roundtrip failed"
+	}
+	set rumor [nostr::event -pubkey [nostr::pubkey -hex $sec] -kind 14 \
+	    -content "sealed"]
+	set got [nostr::unwrap -sec $bob [nostr::wrap -sec $sec -to $bpub $rumor]]
+	if {[dict get $got rumor] ne $rumor} {error "gift wrap roundtrip failed"}
+	list npub [string range [nostr::pubkey $sec] 0 9]… \
+	    sign+verify+nip44+giftwrap ok
+    }
+    if {![catch {package require nostr::relay}]} {
+	check nostr::relay {
+	    # load-only: the DM/relay procs are defined (no network here)
+	    if {![llength [info procs ::nostr::dm::send]]
+		    || ![llength [info procs ::nostr::relay::connect]]} {
+		error "relay layer did not define its commands"
+	    }
+	    return "nostr::relay loaded"
+	}
+    } else {
+	say "skip nostr::relay: not shipped"
     }
 } else {
     say "skip nostr: not compiled in"

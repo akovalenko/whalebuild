@@ -1,14 +1,25 @@
-# tclnostr (github.com/akovalenko/tclnostr) — NIP-01 Nostr
-# signer/verifier on libsecp256k1 (BIP-340 Schnorr) + NIP-19 npub/nsec
-# codec. The configure is a hand-rolled TEA-compatible script;
-# libsecp256k1 rides as a git submodule (the driver clones recipes
-# with --recurse-submodules for exactly this) and is compiled WITHOUT
-# its build system straight into libnostr.a. maketarget picks the
-# static lib alone — the default `all` would also build the dev .so.
-# Windows entropy comes from BCryptGenRandom, hence bcrypt in libs.
-version 0.1
+# tclnostr (github.com/akovalenko/tclnostr) — Nostr signer/verifier on
+# libsecp256k1 (BIP-340 Schnorr): NIP-01 events, NIP-19 npub/nsec,
+# NIP-44 v2 encryption + NIP-59 gift wrap (the crypto for NIP-17
+# private messages), and a relay-frame splitter. The configure is a
+# hand-rolled TEA-compatible script; libsecp256k1 rides as a git
+# submodule (the driver clones recipes with --recurse-submodules for
+# exactly this) and is compiled WITHOUT its build system straight into
+# libnostr.a. maketarget picks the static lib alone — the default `all`
+# would also build the dev .so. Windows entropy comes from
+# BCryptGenRandom, hence bcrypt in libs.
+#
+# relay.tcl is a pure-Tcl layer over the C package (a websocket relay
+# client + NIP-17 DM API); it ships as the separate `nostr::relay`
+# package, pulling websocket/json from tcllib at require time.
+version 0.2
 source git https://github.com/akovalenko/tclnostr
 maketarget libnostr.a
 init Nostr
 libs win64 {-lbcrypt}
-pkgindex {package ifneeded nostr 0.1 {load {} Nostr}}
+vfs {relay.tcl}
+pkgindex {
+    package ifneeded nostr 0.2 {load {} Nostr}
+    package ifneeded nostr::relay 0.2 \
+	[list source [file join $dir relay.tcl]]
+}
