@@ -4,9 +4,9 @@
 # no load) — wrapped whole like bwidget, no recipe pkgindex. The
 # pinned source is BAWT's 7z mirror (upstream SourceForge ships zip,
 # a kind the driver doesn't do). Theme images live in i/.
-# Without tksvg the scalable theme variants refuse to load by design;
-# awdark/awlight fall back to their classic bitmap versions — a tksvg
-# battery would upgrade the whole set in place.
+# The scalable variants work as-is: Tk 9 renders svg photo images in
+# the core (nanosvg), no tksvg extension needed — awbreeze verified
+# live in the whale.
 version 10.4.0
 source 7z https://bawt.tcl3d.org/download/InputLibs/awthemes-10.4.0.7z
 requires tk

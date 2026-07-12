@@ -14,7 +14,7 @@ itcl, tdbc + tdbc::sqlite3, tdom (0.8.3 → 0.9.6), Img/tkimg
 packages), tkdnd (1.0 → 2.9.5), udp/tcludp (1.0.9 → 1.0.13),
 Tkhtml (3.0 → 3.0.2, BAWT snapshot), bwidget (1.x → 1.10.1),
 tklib (0.5 → 0.9), awthemes 10.4.0 (replacing the ttk-theme zoo;
-scalable variants want a future tksvg battery).
+scalable variants incl. — Tk 9 renders svg in the core).
 
 ## Easy wins — bundled in the Tcl 9 tarball (`source tclpkgs`)
 
@@ -22,11 +22,12 @@ scalable variants want a future tksvg battery).
 - **tdbc** + **tdbcodbc** (was 1.0b14) — also in `pkgs/`; sqlite
   backend (`tdbcsqlite3`) is pure script on top of sqlite3.
 
-## Easy wins
+## Superseded before porting
 
-- **tksvg** (auriocus) — svg photo image type; not in the monster
-  set, but unlocks awthemes' scalable variants and svg icons
-  generally. TEA, check Tcl 9.
+- **tksvg** (auriocus) — svg photo images are IN THE CORE on Tk 9
+  (nanosvg; tksvg's own pkgIndex no-ops there). Verified live: the
+  whale creates svg photos and runs awthemes' scalable awbreeze with
+  no extension at all.
 
 ## C extensions with a live upstream — port next
 

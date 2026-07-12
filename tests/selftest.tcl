@@ -273,6 +273,10 @@ if {($tcl_platform(platform) eq "windows"
 	check awthemes {
 	    ttk::style theme use awdark
 	    set r [ttk::style theme use]
+	    # scalable variant — proves Tk 9's built-in svg rendering
+	    package require awbreeze
+	    ttk::style theme use awbreeze
+	    lappend r [ttk::style theme use]
 	    ttk::style theme use default
 	    set r
 	}
